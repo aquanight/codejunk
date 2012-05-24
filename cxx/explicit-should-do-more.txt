@@ -1,0 +1,364 @@
+explicit keyword in C++ should do more.
+
+What it does now (as of C++11 standard):
+
+Prohibit use of unary constructors as casts:
+
+Sample:
+class vector
+{
+// ...
+public:
+	explicit vector(int capacity);
+// ...
+};
+
+Without 'explicit', I could've passed something like "42" to a function that
+expects a vector of strings mapped to integers
+(std::vector<std::map<std::string, int>>). With it, such an attempt is invalid
+- I must use explicit constructor syntax to do that.
+
+Prohibit use of cast operators for implicit conversions (so-called "narrowing"
+conversions as seen in some other OO languages with overloaded casts):
+
+class shared_ptr
+{
+// ...
+	explicit operator bool() const;
+// ...
+};
+
+Without 'explicit', I could use shared_ptr anywhere I could use a boolean
+value. But the catch is that by extension, anywhere a boolean implicitly
+converts to an integer, this class - by virtue of its cast to bool - will too.
+That means I could do this:
+
+int x = myptr;
+
+Although x will be '0' or '1'. With 'explicit' this is not allowed. I may only
+use the cast to bool explicitly, via a C-style cast like (bool)myptr, a
+function-style cast like bool(myptr), or via static_cast<bool>(myptr). C++11
+makes a special case for explicit operator bool() and if/while/for
+conditionals (maybe ?:), and logical operators (!, &&, ||), and treats them as
+explicit bool casts. So I could do this:
+
+int x;
+if (myptr) x = 1; else x = 0;
+
+Is valid because if() is considered an explicit bool cast. But!
+
+if (myptr == false) x = 0; else x = 1;
+
+Is *NOT* valid (barring an overloaded operator== with an argument of type
+'bool'). But if (!myptr) and if (myptr && other) are both valid.
+
+Also of note is that passing the pointer to a function with a parameter of
+type 'bool' is also not valid.
+
+For the specific case of explicit operator bool(), the method to do this prior
+to C++11 was the "safebool" pattern, where the type was actually 'void*'.
+
+New features of explicit I think should exist:
+
+Prohibit implicit conversions to satisify a (possibly overloaded) function
+parameter.
+
+The C++11 article on Wikipedia offers this example of how to force an exact
+type to call a function:
+
+class foo
+{
+	void doubles_only(double arg);
+	template <typename T>
+	void doubles_only(T arg) = delete;
+};
+
+Because of how overload resolution works with regards to overloaded templates,
+the non-template specifying double will be preferred when the argument is of
+type 'double' (or 'double&', 'double&&', 'const double&', etc...). Any other
+type and the compiler will select the template, and immediately fail because
+it's explicitly deleted. But the problem is that it requires using a template,
+and it's "all or nothing" if you do it that way. Also it requires a bit of
+clumsy syntax (the template and the = delete syntax - explicit deletion makes
+more sense when you're deleting something like a copy constructor/assignment).
+
+Another scenario in which this use of 'explicit' would prove useful is to
+provide a way to 'solve' certain overload resolution conundrums, in which a
+compiler has two equally good overloads to select. Consider:
+
+void func(int a, double b);
+void func(double b, int a);
+
+This function is overloaded to allow passing the arguments in either order,
+but if I were to call the function with 2 int parameters, the compiler has two
+equal possibilities to resolve the overload:
+
+func(3, 4); // Problem. Both overloads require promoting 1 arg to double.
+
+In this example, the compiler has no choice but to fail with an error that the
+overload is ambiguous.
+
+Usually in such a case, one version is "preferred". A 3rd overload might be
+given to take two ints, cast one to double, and forward to that version. But
+this requires exporting a 3rd method in a library.
+
+This proposal is to solve both of the above problems by putting 'explicit' in
+the parameter list: when this is seen, it inhibits the compiler from
+performing most kinds of implicit cast to satisfy that parameter. The
+following describe the types of implicit casts allowed, provided that they
+would be allowed normally:
+- Casts that add, remove, or modify reference descriptors, such as to cast
+  lvalues from 'T&' to 'T', or rvalues from 'T&&' to 'T' or 'const T&'.
+- Casts of an array type to the corresponding pointer type.
+- Casts that add cv-qualifications, such as an lvalue from 'T&' to 'const
+  T&', provided such additions are valid normally. Also casts that remove
+  cv-qualification from the top-level object type (ie 'int* const' to 'int*),
+  as is normally permitted for a copied object.
+- Casting the object type of a reference or pointer to a base type (but
+  NOT a derived type). Such as, 'std::ostream&' to 'std::ios_base&'. Note that
+  casting an object type to a base type *by value* (which involves
+  typecutting) is NOT permitted.
+- Cast of any constant expression to a pointer type, where the constant
+  expression meets one of the following criteria:
+  - Is of integer type, and represents the value 0
+  - Is of any pointer type including void*, and represents the null pointer
+  - Is of type nullptr_t (such as the nullptr literal) - this always yields a
+    null pointer.
+  Each such criteria results in a null pointer.
+- Cast of a function pointer, where only the following changes occur:
+  - Argument type changes are as if the target argument was 'explicit' and the
+    original argument was the type a prospective parameter, and such a cast is
+    thereby permitted. I believe this is already the case for a function
+    pointer cast.
+  - No change in the number of arguments is permitted, not even to add or
+    remove optional ones.
+  - Return type changes as if the return type was 'explicit' and was assigned
+    to a variable of the original type. See below on 'explicit' return types.
+  Note that these restrictions may apply even to a non-explicit function
+  pointer type.
+- Cast of a pointer-to-member, such that the associated class of the pointer
+  type is changed to a derived type of the original pointer, or that the
+  object type of the member pointer is changed in a manner that would be
+  permitted for a regular pointer.
+- Casting an integer literal (*only* - not other constant expressions) from
+  type 'int' to type 'short'. Casting a positive integer literal (*only*) with
+  the unsigned suffix from type 'unsigned int' to 'unsigned short'. In both
+  cases the integer must be within the allowed range for the destination type.
+  (This exception provided only because there is no suffix to make an integer
+  literal be of 'short' type, and having to write out a cast for an integer
+  literal is just plain silly.)
+Implicit casts NOT allowed include, but are not limited to, the following:
+- Casts of primitive types to other primitive types, whether widening or
+  narrowing (such as int -> double), with the exception of integer literals
+  cast to 'short' as described above.
+- Casts between integer types and pointer types, except for a constant
+  integer expression equaling 0 being cast to pointer, as detailed above.
+- Casts between pointer types where either object type is 'void' or a
+  primitive type, or the target object type is not a visible base type of the
+  original object type. However, if the original pointer is a constant
+  expression representing a null pointer, it is allowed as detailed above
+  regardless of object type.
+- Casts between reference types where either object type is a primitive type,
+  or the target object type is not a visible base type of the original object
+  type.
+- Casting a function pointer in a manner not permitted above.
+- Casting a pointer-to-member, such that the associated class of the pointer
+  type is changed to a base type, or the object type is changed in a manner
+  not permitted.
+- Casts that would invoke a user-defined cast operator, or a unary
+  constructor.
+In the above 'object type', in reference to pointers or references, refers to
+referant of such a pointer or reference: the 'T' in 'T*', 'T&', or 'T&&'. 'T'
+in this case does not necessarily mean a class type, but can mean a primitive,
+pointer, function, enumeration, or class type.
+
+Thus you can still pass pointers to derived objects, you can still pass
+rvalue references by value, you can pass writable lvalues to const T&, you
+can pass arrays to pointers, and you can pass nullptr to pointers. But you
+cannot pass anything that would require a change in the type other than
+those things.
+
+The same can be applied to a non-type template parameter. However, keep in
+mind that non-type template parameters are by definition constant expressions.
+
+In the event of an overloaded function, failure to satisfy a parameter due to
+an 'explicit' eliminates that overload as a candidate, and allows the compiler
+to select another version. So if we said the first of the two overloads above
+was preferred, we could declare them like so:
+
+void func(int a, double b);
+void func(explicit double a, explicit int b);
+
+Now the call:
+func(3, 4);
+
+Is resolved like this:
+func(int, double) -> Acceptable. Requires implicit cast of parameter 2.
+func(explicit double, explicit int) -> Unacceptable. Implicit cast of
+parameter 1 is inhibited by 'explicit'.
+
+Version two could be called like this:
+func(3.0, 4); // 3.0 is 'double', so we now have exact match of version 2.
+
+But:
+func(3.0, 4L);
+
+Calls version 1 again, with a narrowing conversion of 3.0 to int, and a
+"widening" of 4L to double.
+
+The above class could define its method like this:
+
+class foo
+{
+	void doubles_only(explicit double arg);
+};
+
+It can be called like this:
+foo a;
+a.doubles_only(3.0);
+
+but not:
+a.doubles_only(4); // Error: implicit cast of int to double inhibited
+
+Some examples of the allowed casts under explicit:
+
+struct B {};
+struct C : B {};
+
+void bar(explicit B,
+	explicit const C&,
+	explicit int&&,
+	explicit B*, explicit double*,
+	explicit const char*);
+
+B b;
+C c;
+bar(
+	b, // Allowed cast of 'B&' to 'B' (removing reference)
+	c, // Allowed cast of 'C&' to 'const C&' (adding cv-quals)
+	4+2, // Allowed cast of rvalue 'int' to 'int&&' (adding && to rvalue)
+	&c, // Allowed pointer cast of 'C*' to 'B*' (base-ward pointer cast)
+	nullptr, // Allowed cast of 'nullptr_t' to 'double*' (null pointer)
+	"hi" // Allowed cast of 'const char[3]' to 'const char*'
+);
+// Not allowed:
+bar(
+	c, // Not allowed to type-cut a derived class to base by value
+	b, // Unsafe derived-ward cast not allowed.
+	   // NB: this particular example would probably error anyway, but the
+	   // safer case of (B&)c would fail too.
+	'A', // Not allowed to cast between primitive types, even if widening.
+	     // Also not allowed to cast the object type of a reference,
+	     // except base-ward for class types.
+	"hello", // Implicit reinterpret_cast of char* to 'B*' not allowed.
+	(void*)bar, // Implicit reinterpret_cast involving void* not allowed.
+	argv, // Attempts to decay argv from 'char*[]' to 'char**', but then
+	      // not allowed to reinterpret_cast the extra indirection level
+	      // away.
+);
+
+Prohibit implicit conversions of the return value
+
+The fourth use of 'explicit' is applied to a function's non-void return type.
+In this use, the compiler inhibits all implicit conversions of the return
+type, except those allowed for an explicit argument. Repeated for clarity:
+- Adding or removing a reference descriptor.
+- Adding cv-qualification, or removing it from the top-level type.
+- Casting arrays to pointers.
+- Casting references and pointers to derived objects to references or pointers
+  of their base(s).
+- Casting nullptr_t to any pointer type.
+- Casting integer literals from 'int' to 'short', or U-suffixed unsigned
+  literals from 'unsigned int' to 'unsigned short'.
+Types of casts not allowed:
+- Casts involving primitive types, whether directly or as the object of a
+  reference or pointer. Note that even functions defined as 'constexpr' cannot
+  be cast to a pointer, not even in the case it returns 0.
+- By-value casts between any two types. Even if the types are related by
+  inheritance, and even if (especially if) there is a user-defined conversion
+  operator or unary constructor.
+- By-reference or by-address casts between types that are unrelated, or from a
+  base type to a derived type. Note that even functions defined 'constexpr'
+  cannot be cast this way, even in the case it would return a null pointer.
+- Casts that involve void, either indirectly or directly.[!!]
+
+The [!!] is there for a reason. Check this out:
+
+explicit int square(int x) { return x * x; }
+
+The statement:
+
+square(4);
+
+explicit-should-do-more.txt:269:error: Implicit cast of 'int' to 'void'
+	restricted by 'explicit' declaration on return type.
+explicit-should-do-more.txt:265:See declaration here
+
+This has the side effect that an explicit-d return type cannot be silently
+ignored by calling the function as a statement - the return value *must* be
+assigned or otherwise used.
+
+Prohibit invocation on derived objects.
+
+This one is perhaps of limited usefulness. It creates a method that is sort of
+'not inherited', yet still is. It's probably better for a 'don't call this on
+a derived class unless you know what you're doing' type of deal.
+
+The fifth use of explicit positions at after the argument list, where
+this-pointer cv-qualifications can go:
+
+int method() explicit { ... }
+
+This use inhibits converting the 'this' pointer to call the function: meaning
+the method, even if 'public', can only be invoked through a pointer or
+reference to that exact class. Calling it through a derived object, pointer,
+or reference yields an error that an explicit cast is required.
+
+A derived class can circumvent this restriction with a using statement,
+explicitly importing the explicit function into itself:
+
+using base::method;
+
+This allows the method to be called with an object, reference, or pointer of
+that derived type (only - as this pulls the 'explicit' keyword along for the
+ride) as well as of the defining type.
+
+The derived class can also shadow the base method with its own definition, or
+if the method is virtual, it can override it. Both have the effect of lifting
+the 'explicit' limitations, but now the derived class's method is called
+through derived objects, pointers, and references.
+
+Alternatively, the method can be selected by qualified method name:
+
+drv_obj.base::method();
+
+This restriction applies within the derived class's own definition too, so it
+must remember to qualify the base class name to call the method.
+
+Note that if the method is virtual, and the derived class overrides it, and
+defines its override with 'explicit', both derived and base can be used to
+invoke the method, but the method invoked is the derived class's method in
+both cases because of the virtual method mechanism. IE:
+
+struct base { virtual void thing() explicit; };
+struct deriv : base { virtual void thing() explicit; };
+struct _drv : deriv {};
+
+base* p1;
+deriv* p2;
+_drv* p3;
+p1 = p2 = p3 = new _drv;
+
+p1->thing(); // Valid, and calls deriv::thing via virtual
+p2->thing(); // Valid, and calls deriv::thing via virtual
+p3->thing(); // Invalid, explicit requires cast to defining type.
+
+p3->base::thing(); // Valid, but bypasses virtual, and calls base::thing!
+static_cast<base*>(p3)->thing(); // Valid, same as p1->thing()
+dynamic_cast<_drv*>(p1)->thing(); // Invalid, explicit cast required.
+dynamic_cast<deriv*>(p1)->thing(); // Valid, same as p2->thing()
+
+Note that you couldn't do this to a constructor, since constructors don't have
+a this-pointer cv-qual field. It would only have been of use on a default or
+copy constructor to force a derived class to declare its own and delegate
+explicitly. Which doesn't really serve any purpose.
