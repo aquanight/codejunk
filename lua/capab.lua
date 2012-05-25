@@ -79,4 +79,8 @@ function _M.can_call(x)
 	return type(x) == "function" or has_metamethod(x, "__call");
 end
 
+function _M.can_len(x)
+	return type(x) == "string" or type(x) == "table" or has_metamethod(x, "__len");
+end
+
 return _M;
