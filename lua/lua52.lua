@@ -1,7 +1,8 @@
 -- Implements some of lua 5.2-isms.
 
 -- First check if we are 5.2 to begin with.
-require("require");
+_ = require("require");
+local require = _.require;
 
 if pcall(require, 5.2) then
 	return true; -- Nothing needs doing.
