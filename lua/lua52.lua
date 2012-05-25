@@ -108,7 +108,12 @@ end
 
 -- Lua 5.1 does not allow overriding __len for any string or table,
 -- so just use normal # for such cases.
-function rawlen(v) return #v end
+function rawlen(v)
+	if type(v) ~= "table" and type(v) ~= "string" then
+		error(("bad argument #1 to 'rawlen' (table or string expected, got %s)"):format(type(v)));
+	end
+	return #v
+end
 
 -- xpcall with parameters
 local _xpcall = xpcall;
