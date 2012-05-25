@@ -133,16 +133,17 @@ function _M.readonly(tbl)
 	local rmt = realmeta(tbl);
 	local mt = {};
 	-- Wrap the metamethods. We wrap __(new)index differently.
-	local wrappedmetas = { "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__unm", "__concat", "__eq", "__lt", "__le", "__call", "__metatable", "__pairs", "__ipairs", "__next", "__len" };
+	local wrappedmetas = { "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__unm", "__concat", "__eq", "__lt", "__le", "__call", "__pairs", "__ipairs", "__next", "__len" };
 	for i, v in ipairs(wrappedmetas) do
 		local mm = rawget(rmt, v); -- Do not allow __index lookup of metamethods, to simulate actual metamethod lookups.
-		if mm ~= nil then -- The metamethod exists, wrap it.
+		if type(mm) == "function" then -- The metamethod is a function (lua ignores non-function metas, even if they have a __call).
 			mt[v] = function(t, ...)
 				-- t will be our proxy object, so replace it with the real table
 				return mm(tbl, ...);
 			end;
 		end
 	end
+	mt.__metatable = rmt.__metatable or rmt;
 	mt.__newindex = function(t, k, v)
 		error("This table view is read-only");
 	end;
