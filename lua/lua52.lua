@@ -160,6 +160,10 @@ function string.rep(str, n, ...)
 end
 
 -- bit32 library
+-- parts of this shamelessly ripped from https://github.com/davidm/lua-bit-numberlua/blob/master/lmod/bit/numberlua.lua
+-- parts I deviated from involve: just having bxor do the heavy stuff and none of that caching weirdness (want fast
+-- bitops, get real lua 5.2), band/bor/bxor/btest use a loop rather than recursion
+-- some other cases where I replaced band(..., 2^THING - 1) with ... % 2^THING
 do
 	local MOD = 2^32;
 	local MODM = MOD-1;
