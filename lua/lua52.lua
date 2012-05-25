@@ -63,7 +63,9 @@ function load(ld, ...)
 	if type(ld) == "function" then
 		chunk = "";
 		local piece = ld();
-		while piece ~= nil and piece ~= "" do
+		while true do
+			if piece == nil then break end
+			if piece == "" then break end
 			chunk = chunk .. piece;
 			piece = ld();
 		end
@@ -104,13 +106,13 @@ function loadfile(file, ...)
 	end
 	local function readfile()
 		for line in hnd:lines() do
-			coroutine.yield(line);
+			coroutine.yield(line .. "\n");
 		end
 		hnd:close();
 		return nil;
 	end
 	local fn = coroutine.wrap(readfile);
-	return load(fn, file, ...);
+	return load(fn, "@" .. file, ...);
 end
 
 -- pairs uses metamethod __pairs
