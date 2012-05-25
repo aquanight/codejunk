@@ -79,7 +79,7 @@ function _M.chain(...)
 	local mt = {
 		__index = function(t, k)
 			for i = 1, arg.n, 1 do
-				local val = t[k];
+				local val = arg[i][k];
 				if val ~= nil then
 					return val;
 				end
@@ -88,15 +88,67 @@ function _M.chain(...)
 		end,
 		__newindex = function(t, k, v)
 			for i = 1, arg.n, 1 do
-				local val = t[k];
+				local val = arg[i][k];
 				if val ~= nil then
-					t[k] = v;
+					arg[i][k] = v;
 					return;
 				end
 			end
 			arg[1] = v;
 		end
 	};
+	return setmetatable({}, mt);
+end
+
+-- Creates a view of a table where elements have a mutator function applied to them when retrieved.
+-- If a 'reverse' mutator is applied, this view supports creating/assigning elements as well.
+-- Both mutators are passed the key and value, and are expected to return the value to either return to the
+-- indexer or store in the table.
+function _M.map(tbl, mut, ...)
+	local arg = { n = select("#", ...), ... };
+	local rev = arg[1] or nil;
+	assert(type(tbl) == "table", ("bad argument #1 to 'map' (table expected, got %s)"):format(type(tbl)));
+	assert(type(mut) == "function", ("bad argument #2 to 'map' (function expected, got %s)"):format(type(mut)));
+	if rev ~= nil then
+		assert(type(rev) == "function", ("bad argument #3 to 'map' (function or nil expected, got %s)"):format(type(rev)));
+	end
+	local mt = {
+		__index = function(t, k)
+			return mut(k, tbl[k]);
+		end,
+		__newindex = function(t, k, v)
+			assert(rev, "This table view is read-only");
+			tbl[k] = rev(k, v);
+		end
+	};
+	return setmetatable({}, mt);
+end
+
+-- Creates a read-only view of the table.
+local realmeta = debug.getmetatable;
+local pairs = pairs;
+local ipairs = ipairs;
+function _M.readonly(tbl)
+	assert(type(tbl) == "table", ("bad argument #1 to 'readonly' (table expected, got %s)"):format(type(tbl)));
+	local rmt = realmeta(tbl);
+	local mt = {};
+	-- Wrap the metamethods. We wrap __(new)index differently.
+	local wrappedmetas = { "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__unm", "__concat", "__eq", "__lt", "__le", "__call", "__metatable", "__pairs", "__ipairs", "__next", "__len" };
+	for i, v in ipairs(wrappedmetas) do
+		local mm = rawget(rmt, v); -- Do not allow __index lookup of metamethods, to simulate actual metamethod lookups.
+		if mm ~= nil then -- The metamethod exists, wrap it.
+			mt[v] = function(t, ...)
+				-- t will be our proxy object, so replace it with the real table
+				return mm(tbl, ...);
+			end;
+		end
+	end
+	mt.__newindex = function(t, k, v)
+		error("This table view is read-only");
+	end;
+	mt.__index = function(t, k)
+		return tbl[k];
+	end;
 	return setmetatable({}, mt);
 end
 
