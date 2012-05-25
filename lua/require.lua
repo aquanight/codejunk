@@ -1,4 +1,3 @@
--- require("luaext");
 -- Declarations:
 local tonumber = tonumber;
 local error = error;
