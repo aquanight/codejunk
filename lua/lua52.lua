@@ -83,7 +83,10 @@ function load(ld, ...)
 			error("Text chunks not allowed by 'mode' specification.");
 		end
 	end
-	local loaded = loadstring(chunk, src);
+	local loaded, _ = loadstring(chunk, src);
+	if not loaded then
+		return nil, _;
+	end
 	if arg.n > 2 then
 		if type(arg[3]) ~= "table" then
 			error(("bad argument #4 to 'load' (table expected, got %s)"):format(type(arg[1])));
@@ -93,7 +96,22 @@ function load(ld, ...)
 	return loaded;
 end
 
--- TODO: loadfile(file, [mode, [env]])
+function loadfile(file, ...)
+	local arg = table.pack(...);
+	local hnd, _ = io.open(file, "r");
+	if not hnd then
+		return nil, ("cannot open %s"):format(_);
+	end
+	local function readfile()
+		for line in hnd:lines() do
+			coroutine.yield(line);
+		end
+		hnd:close();
+		return nil;
+	end
+	local fn = coroutine.wrap(readfile);
+	return load(fn, file, ...);
+end
 
 -- pairs uses metamethod __pairs
 local _pairs = pairs;
