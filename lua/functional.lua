@@ -1,4 +1,9 @@
 -- Fun with function metatables.
+--
+-- These methods expect their target to be a real function.
+-- Callable non-functions will not work. But you can always do:
+-- rawget(debug.getmetatable(obj), "__call"):thing:map(obj)
+-- And go from there.
 
 local _M = {};
 
@@ -10,6 +15,7 @@ end
 local sprintf = string.format;
 
 local proto = require("prototype");
+local capab = require("capab");
 
 -- Don't pull in all of 5.2's fun, just define our pack here.
 local function pack(...)
@@ -77,6 +83,17 @@ _M.getinfo = debug.getinfo;
 _M.getupvalue = debug.getupvalue;
 _M.setupvalue = debug.setupvalue;
 
+-- Produces a real function from a callable object. Call this directly if you want it.
+function _M.make_function(fn)
+	if type(fn) == "function" then
+		return fn
+	end
+	local mt = assert(debug.getmetatable(fn), "object is not callable");
+	local call = assert(mt.__call, "object is not callable");
+	assert(type(call) == "function", "object is not callable");
+	return call:map(fn);
+end
+
 -- Produces a function that calls the target with the arguments re-ordered.
 function _M.rearrange(fn, ...)
 	assert(proto.typesof(fn, ...):match("^fn*$"), "bad argument to 'rearrange' (expected a function followed by numeric arguments)");
@@ -96,6 +113,26 @@ function _M.rearrange(fn, ...)
 			if v > arglist.n then arglist.n = v; end
 		end
 		return fn(unpack(arglist));
+	end
+end
+
+-- Calls a function repeatedly, passing it each argument in turn. The return value is combination of all values returned from each iteration.
+-- The second parameter specifies maximum # of arguments to use each time, and defaults to 1.
+function _M.iterate(fn, ...)
+	assert(type(fn) == "function", sprintf("bad argument #1 to 'iterate' (function expected, got %s)", type(fn)));
+	local arg = pack(...);
+	assert(arg[1] == nil or capab.is_natural_number(arg[1]), "bad argument #2 to 'iterate' (count expected)");
+	local argct = arg[1] or 1;
+	return function(...)
+		local args = pack(...);
+		local res = { n = 0 };
+		for ix = 1, args.n, argct do
+			local _ = pack(fn(_unpack(args, ix, args.n)));
+			for rx = 1, _.n do
+				table.insert(res, _[rx]);
+			end
+			res.n = res.n + _.n
+		end
 	end
 end
 
