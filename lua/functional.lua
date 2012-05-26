@@ -98,3 +98,5 @@ function _M.rearrange(fn, ...)
 		return fn(unpack(arglist));
 	end
 end
+
+return _M;
