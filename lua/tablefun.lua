@@ -176,7 +176,7 @@ function _M.is_pure_sequence(tbl)
 			return false, sprintf('Value at ["n"] is not a number (type is %s)', type(tbl.n));
 		else
 			local _in, _fn = modf(tbl.n);
-			if _in <= 0 or _fn != 0 then
+			if _in <= 0 or _fn ~= 0 then
 				return false, sprintf('Value at ["n"] is not a positive integer (%g)', tbl.n);
 			end
 		end
