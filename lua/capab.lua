@@ -83,4 +83,22 @@ function _M.can_len(x)
 	return type(x) == "string" or type(x) == "table" or has_metamethod(x, "__len");
 end
 
+function _M.is_number(x)
+	return tonumber(x) ~= nil;
+end
+
+local inf = 1/0;
+
+function _M.is_real(x)
+	return _M.is_number(x) and (x == x) --[[nan]] and (x ~= inf) and (x ~= -inf);
+end
+
+function _M.is_integer(x)
+	return _M.is_real(x) and ((x % 1) == 0);
+end
+
+function _M.is_natural_number(x)
+	return _M.is_integer(x) and x > 0;
+end
+
 return _M;
