@@ -1,5 +1,7 @@
 local _M = {};
 
+local sprintf = string.format;
+
 -- Returns a table view that contains only the specified keys.
 -- If the keys are integers, they are accessed through view[1 .. j] in order.
 function _M.slice(tbl, ...)
@@ -107,10 +109,10 @@ end
 function _M.map(tbl, mut, ...)
 	local arg = { n = select("#", ...), ... };
 	local rev = arg[1] or nil;
-	assert(type(tbl) == "table", ("bad argument #1 to 'map' (table expected, got %s)"):format(type(tbl)));
-	assert(type(mut) == "function", ("bad argument #2 to 'map' (function expected, got %s)"):format(type(mut)));
+	assert(type(tbl) == "table", sprintf("bad argument #1 to 'map' (table expected, got %s)", type(tbl)));
+	assert(type(mut) == "function", sprintf("bad argument #2 to 'map' (function expected, got %s)", type(mut)));
 	if rev ~= nil then
-		assert(type(rev) == "function", ("bad argument #3 to 'map' (function or nil expected, got %s)"):format(type(rev)));
+		assert(type(rev) == "function", sprintf("bad argument #3 to 'map' (function or nil expected, got %s)", type(rev)));
 	end
 	local mt = {
 		__index = function(t, k)
@@ -129,7 +131,7 @@ local realmeta = debug.getmetatable;
 local pairs = pairs;
 local ipairs = ipairs;
 function _M.readonly(tbl)
-	assert(type(tbl) == "table", ("bad argument #1 to 'readonly' (table expected, got %s)"):format(type(tbl)));
+	assert(type(tbl) == "table", sprintf("bad argument #1 to 'readonly' (table expected, got %s)", type(tbl)));
 	local rmt = realmeta(tbl);
 	local mt = {};
 	-- Wrap the metamethods. We wrap __(new)index differently.
@@ -151,6 +153,57 @@ function _M.readonly(tbl)
 		return tbl[k];
 	end;
 	return setmetatable({}, mt);
+end
+
+-- Tests if a table is a pure Lua 5.2 style sequence.
+-- Returns true if and only if:
+-- - Key [1] exists (does not contain 'nil').
+-- - For any key x where x is a positive integer greater
+--   than 1, if key [x] exists, then key [x - 1] also exists.
+-- - If key ["n"] exists, it contains a positive integer equal
+--   to the highest valid index as described above.
+-- - The table contains no other keys.
+-- Returns true if the table is a sequence.
+-- Else returns false and a string explaining why.
+local math = math;
+local modf = math.modf;
+function _M.is_pure_sequence(tbl)
+	if tbl[1] == nil then
+		return false, "No item at index [1]";
+	end
+	if tbl.n ~= nil then
+		if type(tbl.n) ~= "number" then
+			return false, sprintf('Value at ["n"] is not a number (type is %s)', type(tbl.n));
+		else
+			local _in, _fn = modf(tbl.n);
+			if _in <= 0 or _fn != 0 then
+				return false, sprintf('Value at ["n"] is not a positive integer (%g)', tbl.n);
+			end
+		end
+	end
+	for k,v in pairs(tbl) do
+		if type(k) == "number" then
+			local ik, fk = modf(k);
+			if fk == 0 and ik > 0 then
+				if tbl.n and ik > tbl.n then
+					return false, sprintf('Value at ["n"] is incorrect. It is %g but an index at %g was found', tbl.n, k);
+				end
+				if tbl[k - 1] == nil then
+					return false, sprintf('Gap at index [%g]', (k - 1));
+				end
+				if (k - 1) == k then
+					-- The index is so large it cannot reach unit-precision. Fail it.
+					return false, sprintf("Index [%g] is too large for sequence-level precision", k);
+				end
+			else
+				return false, sprintf("Index [%g] is not a positive integer", k);
+			end
+		elseif k ~= "n" then
+			return false, sprintf("Index [%q] is not a number", tostring(k));
+		end
+	end
+	-- No issues found.
+	return true;
 end
 
 return _M;
