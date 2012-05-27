@@ -68,7 +68,7 @@ local function is_option(arg)
 end
 local function getopts(args, optstr, ...)
 	assert(type(args) == "table", ("bad argument #1 to 'getopts' (table expected, got %s)"):format(type(args)));
-	assert(type(optstr) == "string", ("bad argument #2 to 'getopts' (string expected, got %s)"i):format(type(optstr)));
+	assert(type(optstr) == "string", ("bad argument #2 to 'getopts' (string expected, got %s)"):format(type(optstr)));
 	local opttable = {};
 	local nonopt_mode = nil; -- Permute Mode
 	if optstr:sub(1, 1) == "-" then
