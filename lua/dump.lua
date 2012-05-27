@@ -1,4 +1,8 @@
-function dump(value, name)
+function dump(value, ...)
+	local arg = { n = select("#", ...), ... };
+	local name = arg[1] or "_";
+	assert(type(name) == "string", ("bad argument #2 to 'dump' (string expected, got %s)"):format(type(name)));
+	assert(name:match("^[%a_][%w_]*$"), "name must be a valid Lua identifier");
 	local references = {}
 	local refname = name .. "_refs"
 
