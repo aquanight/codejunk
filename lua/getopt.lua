@@ -1,12 +1,12 @@
 -- This function is an iterator. It returns the 3 values needed to use a for/in block.
 -- 'args' is expected to be a table constructed by { ... } in the main chunk.
--- This table may be modified by getopt(3) so it is highly recommended that the calling code retains a reference.
+-- This table may be modified by getopts so it is highly recommended that the calling code retains a reference.
 -- 'optstr' is formatted as defined by getopt(3)
 -- Subsequent arguments specify the name of permitted "long options", which are specified on the command line as "--name[=value]".
 -- Each argument specifies the full name. Note that no name can contain an = except as a suffix: if a single = suffixes the name, then
 -- that long option shall require an argument. If two = suffix the name, then that long option shall allow an optional argument.
--- Note that if '-' appears in optstr, the only way to specify it is with another "short option" character defined in optstr that takes no argument.
 -- Long options with an optional argument require that argument specified with the option in a single parameter (--name=value, but not --name value).
+-- Note that if '-' appears in optstr, the only way to specify it is with another "short option" character defined in optstr that takes no argument.
 -- This is because -- alone means termination of the option list, and --text is taken as a long option. If 'a' took an argument (even if optional), then
 -- -a- would specify a with a argument of '-'.
 -- Valid short options are not automatically valid long options (eg if -a is valid, --a is not automatically valid) and vice versa (if --a is valid, -a is
@@ -16,11 +16,13 @@
 -- 	This is the default mode. Note that there is no mechanism to explicitly select Permute Mode, even when the POSIXLY_CORRECT environment
 -- 	variable is set.
 -- POSIX Mode: The first non-option argument terminates processing.
--- 	This mode is selected if the environment variable POSIXLY_CORRECT is set or 'optstr' begins with a + character.
--- In-place Mode: In this mode, each non-option argument is treated as an argument to the option '\001', even is returned as such even if '\001' is not
+-- 	This mode is selected if the environment variable POSIXLY_CORRECT is set and 'optstr' does not begin with a - character,
+-- 	or else if 'optstr' begins with a + character.
+-- In-place Mode: In this mode, each non-option argument is treated as an argument to the option '\001', and is returned as such even if '\001' is not
 -- specified in optstr. Note that if no '--' option is found, this means all arguments in args are used.
+-- 	This mode is selected if 'optstr' begins with a - character, even if the POSIXLY_CORRECT environment variable is set.
 -- In any mode, an option consisting of "--" terminates option processing at that point. Even in 'in-place mode', no further options are processed.
--- When the iteration finishes, it inserts an option containing "--" just after the last option argument processed,
+-- When the iteration finishes, it inserts into the args table an option containing "--" just after the last option argument processed,
 -- if one is not already present at that location. This way the main program can find where non-options begin by searching for this value.
 -- Iteration products:
 -- The first value of the iteration is one of three values:
@@ -33,6 +35,25 @@
 -- When the first value is 'false', the second value is the option character that caused this result, and the third value is '?' if the error was due
 -- to an unrecognized character, or ':' if the error was due to a missing argument.
 -- When the first value is 'nil', there are no other result values. In typical usage in a for/in loop, this condition terminates the loop.
+-- The args table is enumerated as a sequence, so only numeric indexes are used, and the first 'nil' encountered is taken as the end of the list.
+-- Usually, you construct args with { ... } in the main script, and thus this will not be an issue.
+-- Differences from getopt(3):
+-- - We're actually more like GNU getopt_long, in that it's a combined function of short and long options.
+-- - Iterate this via a 'iterator for' loop, rather than a while loop.
+-- - Rather than using global variables, all pertinent information is handled via anonymous function upvalues and iterator return values.
+--   Therefore, this getopts() is re-entrant (provided different tables are used), while getopt(3) is not.
+-- - Long options do not use the "select a place to store the result" method. Rather they are returned, in full name, the same as any
+--   short option.
+-- - The above documentation on erroneous options deviates from getopt(3), in that getopt(3) simply stuffs the actual option in a global variable,
+--   emits an error message on stderr and returns '?' (the caller may request it to return ':' if it is due to a missing parameter).
+--   getopts returns false, the option character, and either '?' or ':', and does not emit an error message - that is the application's responsibility.
+-- - getopt(3) documentation does not clarify if a '-' prefix overrides the POSIXLY_CORRECT variable. In getopts, it does.
+--
+-- Typical usage:
+-- for valid, opt, arg in getopts({...}, "abc:", "with-prefix=")
+-- 	assert(valid, (arg == "?" and "Unknown option %s" or "Missing argument for %s"):format(opt));
+-- 	--do stuff to opt/arg
+-- end
 local function is_option(arg)
 	if #arg < 2 then
 		return false;
@@ -46,21 +67,25 @@ local function is_option(arg)
 	return true;
 end
 local function getopts(args, optstr, ...)
+	assert(type(args) == "table", ("bad argument #1 to 'getopts' (table expected, got %s)"):format(type(args)));
+	assert(type(optstr) == "string", ("bad argument #2 to 'getopts' (string expected, got %s)"i):format(type(optstr)));
 	local opttable = {};
 	local nonopt_mode = nil; -- Permute Mode
-	if os.getenv("POSIXLY_CORRECT") ~= nil or optstr:sub(1,1) == "+" then
-		nonopt_mode = '+'; -- POSIX mode 
-	elseif optstr:sub(1, 1) == "-" then
+	if optstr:sub(1, 1) == "-" then
 		nonopt_mode = '-'; -- In-place mode
+	elseif os.getenv("POSIXLY_CORRECT") ~= nil or optstr:sub(1,1) == "+" then
+		nonopt_mode = '+'; -- POSIX mode 
 	else
 	end
-	optstr = optstr:gsub("^[+-]?:?", ""); -- Remove leading +/- and leading : (we implement leading : via 4th value in error condition)
+	optstr = optstr:gsub("^[+-]?:?", ""); -- Remove leading +/- and leading : (we implement leading : via 3rd value in error condition)
 	local options = {};
-	local longopts = { ... };
+	local longopts = { n = select(#, ...), ... };
 	for opt,arg in optstr:gmatch("(.)(:?:?)") do
 		options[opt] = #arg;
 	end
-	for i,v in ipairs(longopts) do
+	for i = 1, longopts.n do
+		local v = longopts[i];
+		assert(type(v) == "string", ("bad argument #%d to 'getopts' (string expected, got %s)"):format(i+2, type(v)));
 		local name, arg = v:match("^([^=]+)(=?=?)$");
 		if name == nil then
 			error("Embedded = are not allowed in a longopt name.");
