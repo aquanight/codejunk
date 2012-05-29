@@ -127,12 +127,13 @@ function _M.iterate(fn, ...)
 		local args = pack(...);
 		local res = { n = 0 };
 		for ix = 1, args.n, argct do
-			local _ = pack(fn(_unpack(args, ix, args.n)));
+			local _ = pack(fn(_unpack(args, ix, ix + (argct - 1))));
 			for rx = 1, _.n do
 				table.insert(res, _[rx]);
 			end
 			res.n = res.n + _.n
 		end
+		return unpack(res);
 	end
 end
 

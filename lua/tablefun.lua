@@ -1,6 +1,13 @@
 local _M = {};
 
 local sprintf = string.format;
+local tonumber = tonumber;
+local assert = assert;
+
+--I do this a lot so...
+local function assertf(cond, format, ...)
+	return assert(cond, sprintf(format, ...));
+end
 
 -- Returns a table view that contains only the specified keys.
 -- If the keys are integers, they are accessed through view[1 .. j] in order.
@@ -66,6 +73,18 @@ function _M.rawslice(tbl, ...)
 	};
 	return setmetatable({}, mt);
 end
+
+-- "splice" removes a sequence of elements from the table and returns them (as table.remove does),
+-- and optionally inserts a new sequence of elements in its place.
+-- Only the table's sequence portion is affected.
+-- If the caller uses the key "n" for the table's length, it is the caller's responsibility to update the
+-- value.
+-- Syntax: splice(tbl[, start[, end[, ...]]]);
+-- If 'start' is absent it defaults to 1.
+-- If 'end' is absent it defaults to #tbl.
+-- The '...' portion inserts a new range of items. The range at 'start' and 'end' is expanded or collapsed
+-- according to the length of the new item set. Note that the resulting table might no longer be a sequence!
+_M.splice = assert(package.loadlib("./tablefun.so", "table_splice"));
 
 -- Creates a "chain" of tables where any index not found in the first
 -- is looked up in the next.

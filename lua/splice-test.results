@@ -1,0 +1,90 @@
+Setting up test table:
+do
+local __refs = {
+}
+_ = {
+	[1] = 1
+	[2] = 2
+	[3] = 5
+	[4] = 6
+}
+done
+
+First trial of splice - inserting 2 elements into the sequence.
+TEST: there should be no results returned
+PASS
+Verification of x:
+do
+local __refs = {
+}
+_ = {
+	[1] = 1
+	[2] = 2
+	[3] = 3
+	[4] = 4
+	[5] = 5
+	[6] = 6
+}
+done
+
+TEST: There should only be 6 keys, from 1 through 6.
+PASS	See dump
+Second trial of splice - removing 3 elements from the sequence.
+TEST: there should be 3 results returned: 3, 4, 5
+PASS	3	4	5
+Verification of x:
+do
+local __refs = {
+}
+_ = {
+	[1] = 1
+	[2] = 2
+	[3] = 6
+}
+done
+
+TEST: There should only be 3 keys: 1, 2, and 3.
+PASS	See dump
+Third trial: a longer insertion of 4 random numbers.
+The random numbers that will be inserted are:
+841	395	784	799
+TEST: As before, there should be no results returned.
+PASS
+Verification of x:
+do
+local __refs = {
+}
+_ = {
+	[1] = 1
+	[2] = 2
+	[3] = 841
+	[4] = 395
+	[5] = 784
+	[6] = 799
+	[7] = 6
+}
+done
+
+THere should be now 7 keys: 1 through 7.
+PASS	See dump
+Final trial: replacing the 4 random numbers previously inserted
+with the correct sequence (3, 4, 5).
+TEST: The 4 random numbers from before should have be returned.
+PASS	841	395	784	799
+Verification of x:
+do
+local __refs = {
+}
+_ = {
+	[1] = 1
+	[2] = 2
+	[3] = 3
+	[4] = 4
+	[5] = 5
+	[6] = 6
+}
+done
+
+There should be now only 6 keys: 1 through 6.
+PASS	See dump
+0 tests failed

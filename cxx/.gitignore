@@ -1,7 +1,0 @@
-# Ignore GCC output files:
-# Object, library output:
-*.o
-*.a
-*.so
-# libtool .la outputs
-*.la
