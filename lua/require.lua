@@ -104,4 +104,81 @@ function _M.require(...)
 	end
 end
 
+if not package.searchpath then
+	-- Returns 'str' with all non-alphanumeric characters escaped with % to guard them against the regex engine.
+	local function demagic(str)
+		local res = str:gsub("(%W)", "%%%1");
+		res = res:gsub("%z", "%%z");
+		return res;
+	end
+
+	local spl = require("strsplit");
+
+	-- Lua 5.2 pacakge.searchpath
+	function package.searchpath(pkg, pathspec, ...)
+		local errmsg = "";
+		local arg = { n = select("#", ...), ... };
+		assert(type(pkg) == "string", ("bad argument #1 to 'searchpath' (string expected, got %s)"):format(type(pkg)));
+		assert(type(pathspec) == "string", ("bad argument #2 to 'searchpath' (string expected, got %s)"):format(type(pathspec)));
+		local pkgsep = arg[1] or "%.";
+		assert(arg.n < 1 or type(arg[1]) == "string", ("bad argument #3 to 'searchpath' (string expected, got %s)"):format(type(arg[1])));
+		assert(arg.n < 2 or type(arg[2]) == "string", ("bad argument #4 to 'searchpath' (string expected, got %s)"):format(type(arg[2])));
+		local dirsep, tplsep, namesub, exepath, exclude = package.config:match("^(.)\n(.)\n(.)\n(.)\n(.)");
+		assert(dirsep and tplsep and namesub and exepath and exclude, "package.config is malformed!");
+		dirsep = arg[2] or dirsep;
+		local pkgfile = pkg:gsub(demagic(pkgsep), demagic(dirsep));
+		for _, tok in spl.strtok(tplsep, pathspec) do
+			print("tok", tok, "namesub", namesub, "pkgfile", pkgfile);
+			print('demagiced:', demagic(namesub), demagic(pkgfile));
+			local fname = tok:gsub(demagic(namesub), demagic(pkgfile));
+			print('fname', fname);
+			local fd = io.open(fname, "rb");
+			if fd then
+				fd:close();
+				return fname;
+			else
+				errmsg = errmsg .. ("\n\tno file %s"):format(fname);
+			end
+		end
+		return nil, errmsg;
+	end
+end
+
+local function name_luaopen(dllname)
+	local dirsep, tplsep, namesub, exepath, exclude = package.config:match("^(.)\n(.)\n(.)\n(.)\n(.)");
+	assert(dirsep and tplsep and namesub and exepath and exclude, "package.config is malformed!");
+	local ix = dllname:find(exclude, 1, true);
+	if ix ~= nil then
+		dllname = dllname:sub(ix + 1);
+	end
+	return ("luaopen_%s"):format(dllname:gsub("%.", "_"));
+end
+
+-- This helper function assists with creating so-called "hybrid" modules - modules that are implemented in a mixture
+-- of C and Lua. Generally, the Lua module provides the "primary setup" (since by default .lua files are loaded in
+-- preference over a C library) and uses this function to import specific methods from the library.
+-- Essentially, it is package.loadlib but with cpath searching ability.
+-- If a function name is given, then the return value is that function as a C function.
+-- If no function name is given, then the appropriate luaopen_* name is loaded for that library and invoked. That function's
+-- return value(s) are returned. If the library returns no values, the function returns 'true'.
+-- If an error occurs, the first return value is 'nil'. Note that luaopen_ could return 'nil'.
+function _M.hybrid_load(lib, ...)
+	assert(type(lib) == "string", ("bad argument #1 to 'hybrid_load' (string expected, got %s)"):format(type(lib)));
+	local arg = { n = select("#", ...), ... };
+	assert(arg.n < 1 or type(arg[1]) == "string", ("bad argument #2 to 'hybrid_load' (string expected, got %s)"):format(type(arg[1])));
+	local so, why = package.searchpath(lib, package.cpath);
+	if not so then
+		return nil, ("Could not find library '%s'%s"):format(lib, why);
+	end
+	if arg[1] then
+		return package.loadlib(so, arg[1]);
+	else
+		local lo, why = package.loadlib(so, name_luaopen(lib));
+		if not lo then
+			return nil, why;
+		end
+		return lo();
+	end
+end
+
 return _M;
