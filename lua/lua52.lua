@@ -144,30 +144,7 @@ end
 -- Mirror package.loaders in package.searchers
 package.searchers = package.loaders;
 
-local splitter = require("strsplit");
-function package.searchpath(name, path, ...)
-	local arg = table.pack(...);
-	local conf = spliiter.split("\n", package.config);
-	local dirsep = arg[2] or conf[1]; -- What seperates directory names
-	local tplsep = conf[2]; -- What seperates templates
-	local tplrep = conf[3]; -- What do we replace in templates?
-	-- TODO Implement this next one.
-	local exedir = conf[4]; -- EXE directory placeholder, for windows
-	local pkgsep = arg[1] or ".";
-	local filename = name:gsub(pkgsep:gsub("(%W)", "%%%1"), pkgsep:gsub("(%W)", "%%%1"));
-	local errm = "";
-	for _, dir in splitter.strtok(tplsep, path) do
-		local file = dir:gsub(tplrep:gsub("(%W)", "%%%1"), filename);
-		local hndl, err, errno = io.open(file, "r");
-		if hndl ~= nil then
-			hndl:close();
-			return file;
-		else
-			errm = errm .. ("\tno file '%s')"):format(file);
-		end
-	end
-	return nil, errm;
-end
+-- package.searchpath was added to require.lua which we import above.
 
 -- string.sep supports a "delimiter" argument
 function string.rep(str, n, ...)
