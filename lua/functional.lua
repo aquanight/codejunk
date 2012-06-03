@@ -64,6 +64,25 @@ function _M.chain(fn, ...)
 	end
 end
 
+-- Mutates the arguments to a function by filtering them through another.
+-- The mutator function is called with the parameters from the incoming parameter list starting
+-- from the specified point and the function's return value(s) are used instead.
+-- start indicates the point to start substituting.
+-- If start is not given it defaults to 1 (all parameters modified - it becomes a reverse of chain()).
+-- If start is negative it selects starting from the end.
+function _M.mutate(fn, mut, start)
+	assert(type(fn) == "function", sprintf("bad argument #1 to 'mutate' (function expected, got %s)", type(fn)));
+	assert(type(mut) == "function", sprintf("bad argument #2 to 'mutate' (function expected, got %s)", type(mut)));
+	assert(tonumber(start), sprintf("bad argument #3 to 'mutate' (number expected, got %s)", type(start)));
+	assert(start ~= 0, "bad argument #3 to 'mutate' (start may not be 0)");
+	return function(...)
+		local arg = pack(...);
+		local sta = (start > 0 and start or ((arg.n + 1) - start));
+		local res = pack(mut(_unpack(arg, sta, arg.n)));
+		return fn(_unpack(arg, 1, sta - 1), unpack(res));
+	end
+end
+
 -- Wraps the multiple results of a function into a table.
 function _M.tabulate(fn)
 	assert(type(fn) == "function", sprintf("bad argument #1 to 'tabulate' (function expected, got %s)", type(fn)));
