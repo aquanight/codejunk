@@ -79,7 +79,7 @@ local function getopts(args, optstr, ...)
 	end
 	optstr = optstr:gsub("^[+-]?:?", ""); -- Remove leading +/- and leading : (we implement leading : via 3rd value in error condition)
 	local options = {};
-	local longopts = { n = select(#, ...), ... };
+	local longopts = { n = select("#", ...), ... };
 	for opt,arg in optstr:gmatch("(.)(:?:?)") do
 		options[opt] = #arg;
 	end
@@ -122,7 +122,13 @@ local function getopts(args, optstr, ...)
 					local foundix = nil;
 					for ix = (optind + 1), #args, 1 do
 						local thatarg = args[ix];
-						if thatarg == "--" then break; end
+						if thatarg == "--" then
+							-- How we deal with this is that we want the remaining non-options to be added to the
+							-- set of options not to be processed (and are therefore nonoptions).
+							assert(table.remove(args, ix) == "--");
+							table.insert(args, optind, "--");
+							return nil;
+						end
 						if is_option(thatarg) then foundix = ix; break; end
 					end
 					if foundix == nil then

@@ -60,6 +60,7 @@ local theend;
 for i,v in ipairs(args) do
 	if v == "--" then
 		theend = i;
+		break;
 	end
 end
 
