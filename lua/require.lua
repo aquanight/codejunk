@@ -104,6 +104,104 @@ function _M.require(...)
 	end
 end
 
+-- As require(...) but if successful it will assign to the variable 'name'.
+-- Up the first . in 'name' determines the basename to use. It will be assigned
+-- to the global 'name' in the environment of the caller, unless the caller has declared
+-- a local variable with that name. In that case, the local variable is used.
+local function use(name, ...)
+	local result = require(name, ...);
+	if type(result) == "table" then
+		local basename = name:match("^([^%.]*)");
+		local ix;
+		ix = 1;
+		while true do
+			local lcln, lclv = debug.getlocal(2, ix);
+			if lcln == nil then
+				break
+			end
+			if lcln == basename then
+				debug.setlocal(2, ix, result);
+				return result;
+			end
+		end
+		local env;
+		local fn = assert(assert(debug.getinfo(2), "ugh").func, "ugh");
+		if pcall(require, 5.2) then
+			local upn, upv = debug.getupvalue(fn, 1);
+			assert(upn == "_ENV");
+			env = upv;
+		else
+			env = getfenv(fn);
+		end
+		env[basename] = result;
+	end
+	return result;
+end
+
+local function make_new_env(name, oldenv)
+	local modtbl = {};
+	package.loaded[name] = modtbl;
+	modtbl._NAME = name;
+	modtbl._M = modtbl;
+	modtbl._PACKAGE = name:match("^(.*%.)[^%.]*$");
+	local env = setmetatable({}, {
+		__name = name,
+		__env = oldenv,
+		__modtbl = modtbl,
+		__index = function(t, k)
+			local v = modtlb[k];
+			if v ~= nil then
+				return v;
+			end
+			v = oldenv[k];
+			if v ~= nil then
+				return v;
+			end
+			return nil;
+		end,
+		__newindex = function(t, k, v)
+			modtbl[k] = v;
+		end
+	});
+	return env;
+end
+
+
+-- Better module(). This is a global override, rather than putting it in the table like with require.
+-- Difference from 5.1 lua:
+-- - the environment is a proxy table. __index pulls from the module, then from the previous environment.
+--   This makes package.seeall unnecesssary. Also it means the global environment is not exposed via the
+--   module.
+-- - __newindex stores in the module.
+-- - The global 'name' isn't created, only package.loaded[name].
+--   This means that a "module tree" (such as 'a' and 'b' in 'a.b.c') is not assumed to exist.
+-- Is Lua 5.2 compliant (changing upvalue#1 to update the environment).
+function module(name)
+	-- Caller is index 2 for getupvalue/getfenv/whatever.
+	local inf = debug.getinfo(2);
+	if inf.what == "tail" then
+		-- module() was tail-called, so changing the environment is pointless.
+		package.loaded[name] = {};
+		return package.loaded[name];
+	end
+	local fn = inf.func;
+	local newenv;
+	assert(fn, "cannot find caller function or chunk to adjust environment");
+	if pcall(require, 5.2) then
+		-- Lua 5.2. No getfenv/setfenv, we must instead target the first upvalue of the caller, where _ENV resides.
+		local uvn, uvt = debug.getupvalue(fn, 1);
+		assert(uvn == "_ENV", "Cannot update environment, the first upvalue is not _ENV");
+		assert(type(uvt) == "table", "Cannot update environement, _ENV is not a table");
+		newenv = make_new_env(name, uvt);
+		debug.setupvalue(fn, 1, newenv);
+	else
+		local oldenv = getfenv(fn);
+		assert(type(oldenv == "table"), "environment is not a table");
+		newenv = make_new_env(name, oldenv);
+		setfenv(fn, newenv);
+	end
+end
+
 if not package.searchpath then
 	-- Returns 'str' with all non-alphanumeric characters escaped with % to guard them against the regex engine.
 	local function demagic(str)
