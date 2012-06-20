@@ -6,7 +6,7 @@ use Irssi;
 our $VERSION = 1;
 
 our %IRSSI = (
-	author => qw(aquanight)'
+	author => qw(aquanight),
 	license => 'public domain',
 	description => "Converts CTRL+D formatting codes into standard IRC coloring for incoming server messages, closes a remote bypass to hide_colors/hide_text_styles",
 	name => 'remove_ctrl_d'
@@ -49,7 +49,7 @@ sub sig_remove_ctrl_d($$)
 
 	if ($data =~ /\x04/)
 	{
-		$data =~ s/\x04a//g; # Remove FORMAT_STYLE_BLINK
+		$data =~ s/\x04a/\cF/g; # Replace FORMAT_STYLE_BLINK with CTRL+F
 		$data =~ s/\x04b/\c_/g; # Replace FORMAT_STYLE_UNDERLINE with CTRL+_
 		$data =~ s/\x04c/\cB/g; # Replace FORMAT_STYLE_BOLD with CTRL+B
 		$data =~ s/\x04d/\cV/g; # Replace FORMAT_STYLE_REVERSE with CTRL+V
