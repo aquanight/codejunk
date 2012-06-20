@@ -33,6 +33,8 @@ sub sig_print_text($$)
 {
 	my ($dst, $txt, $stripped) = @_;
 
+	my $rewrite = 0;
+
 	if ($txt =~ /\t/)
 	{
 		# ABSOLUTELY MUST NOT EVER PRINT A TAB HERE!!!
@@ -56,7 +58,26 @@ sub sig_print_text($$)
 			my $softadj = 0; # Amount of spacing added.
 			$txt =~ s/\t/soft_tabs($ts, pos($txt), $softadj)/ge;
 		}
-		#$dst->print($txt);
+		$rewrite = 1;
+	}
+
+	if ($txt =~ /\cH/)
+	{
+		# Must handle UTF-8 characters correctly.
+		if (Irssi::settings_get_str("term_charset") eq "utf-8")
+		{
+			utf8::decode($txt);
+		}
+		$txt =~ s/(.+)(??{sprintf("%c{%d}", 8, length($^N))})/\cDg\cD4\/$1\cDg/g;
+		$rewrite = 1;
+		if (Irssi::settings_get_str("term_charset") eq "utf-8")
+		{
+			utf8::encode($txt);
+		}
+	}
+
+	if ($rewrite)
+	{
 		Irssi::signal_emit("print text", $dst, $txt, $stripped);
 		Irssi::signal_stop();
 	}
