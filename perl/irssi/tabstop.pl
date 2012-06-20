@@ -29,6 +29,7 @@ sub soft_tabs($$\$)
 	return " " x $spc;
 }
 
+our $_state; # MUST be 'our' for 'local' to work.
 sub sig_print_text($$)
 {
 	my ($dst, $txt, $stripped) = @_;
@@ -68,7 +69,8 @@ sub sig_print_text($$)
 		{
 			utf8::decode($txt);
 		}
-		$txt =~ s/(.+)(??{sprintf("%c{%d}", 8, length($^N))})/\cDg\cD4\/$1\cDg/g;
+		$_state = 0;
+		$txt =~ s/((?:\cB|\c_|\cV|\cO|\cF|\cC\d*,\d*|\cD[abcdeghi]|\cD..|\e\[[[:digit:];]*m)*(?:.(?{local $_state = $_state + 1}))+)(??{sprintf("%c{%d}", 8, $_state)})/sprintf("\cDg\cD4\/%s\cDg", Irssi::strip_codes($1))/ge;
 		$rewrite = 1;
 		if (Irssi::settings_get_str("term_charset") eq "utf-8")
 		{
