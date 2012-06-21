@@ -6,6 +6,8 @@ local select = select;
 
 local _M = { ["_VERSION"] = 1 };
 
+local spl = require("strsplit");
+
 -- Extends the require() function with version-checking support.
 -- Usage:
 -- local _ = require("require");
@@ -37,7 +39,7 @@ local _M = { ["_VERSION"] = 1 };
 -- the specified version against it. If this test fails, require() raises an error, otherwise it
 -- returns the table. This test requires that the provided _VERSION field is either a number, or else
 -- a string with a trailing numeric part (like how _VERSION is). Such a trailing section can have
--- multiple version depths (like 3,4,5,1,2,3), but only the top two (3.4 in that example), are tested.
+-- multiple version depths (like 3.4.5.1.2.3), but only the top two (3.4 in that example), are tested.
 -- If the value returned by the module is a numeric value, this require() tests that value against
 -- the requested version.
 -- If the value returned by the module is anything else, require() raises an error.
@@ -108,10 +110,10 @@ end
 -- Up the first . in 'name' determines the basename to use. It will be assigned
 -- to the global 'name' in the environment of the caller, unless the caller has declared
 -- a local variable with that name. In that case, the local variable is used.
-local function use(name, ...)
+function _M.use(name, ...)
 	local result = require(name, ...);
 	if type(result) == "table" then
-		local basename = name:match("^([^%.]*)");
+		local basename = name:match("^([^%.]*)%.") or "";
 		local ix;
 		ix = 1;
 		while true do
@@ -149,7 +151,7 @@ local function make_new_env(name, oldenv)
 		__env = oldenv,
 		__modtbl = modtbl,
 		__index = function(t, k)
-			local v = modtlb[k];
+			local v = modtbl[k];
 			if v ~= nil then
 				return v;
 			end
@@ -209,8 +211,6 @@ if not package.searchpath then
 		res = res:gsub("%z", "%%z");
 		return res;
 	end
-
-	local spl = require("strsplit");
 
 	-- Lua 5.2 pacakge.searchpath
 	function package.searchpath(pkg, pathspec, ...)
