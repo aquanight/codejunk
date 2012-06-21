@@ -30,4 +30,11 @@ function _M.split(delim, str)
 	return res;
 end
 
+-- Backwards version loaded into the string table, making it available as a method applied to a string
+-- directly like so
+-- tbl = csvline:split(",")
+function string.split(str, delim)
+	return _M.split(delim, str);
+end
+
 return _M;
