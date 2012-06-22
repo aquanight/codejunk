@@ -8,6 +8,136 @@ local _M = { ["_VERSION"] = 1 };
 
 local spl = require("strsplit");
 
+-- Performs a version comparison.
+-- The logic of this is pretty much 100% copied from Gentoo's portage version parsing.
+-- A version may be of the following format:
+-- versionpart ::= Digit { Digit }
+-- versionnum ::= versionpart { '.' versionpart }
+-- versionsuffix ::= 'pre' | 'p' | 'beta' | 'alpha' | 'rc'
+-- version ::= [ 'cvs.' ] versionum [ LowercaseLetter ] { '_' versionsuffix { Digit } }
+-- 1) Versions prefixed with 'cvs.' are considered later than those without, regardless of other components.
+--    ("cvs.4.2" > "5.3" for example)
+-- 2) The main portion of the version is broken into parts seperated by . and the first part that is unequal
+--    determines the result. 5.4 > 5.3 and 5.3.2 < 5.4.2. Leading zeros in version number are stripped.
+--    Note that this breaks the normal understanding of decimal point of digit magnitudes. Specifically, 5.12 > 5.3
+-- 3) If the dotted components are unequal length, and the components are otherwise equal up to that point, then
+--    the longer version number is greater. 5.2.1 > 5.2 and 4.3.6 < 4.3.6.3
+-- 4) If the dotted components are equal throughout, then the next part checked is an optional letter suffix.
+--    A letter suffix is greater than no suffix at all, and otherwise letter sort order is used.
+--    5.3.4a > 5.3.4 and 4.3.5g < 4.3.5z
+-- 5) If the dotted components and letter suffix are equal (or equally absent), then the release suffix is compared.
+--    The sort order for the "phase" string is: "alpha" < "beta" < "pre" < "rc" < "p".
+--    No suffix given is equivalent to saying _p with a stage number of -1: it is greter than any _pre suffix, but less
+--    than any explicit _p suffix.
+--    5.3.4 < 5.3.4_p0, 5.3.4_beta3 > 5.3.4_alpha5
+-- 6) If the release suffix is equal, then the stage number following it is compared. Except in the case of having no suffix
+--    at all, a missing stage number is treated as 0.
+-- 7) At this point, no inequality has been found. The version numbers are equal.
+-- Return value is positive if verA > verB, negative if verA < verB, and 0 if they are equal.
+-- Error is raised if either version is invalid. 
+local sfxvalue = {
+	pre = -2,
+	p = 0,
+	alpha = -4,
+	beta = -3,
+	rc = -1,
+};
+local function cmp_versions(verA, verB)
+	-- A couple of accumulators.
+	local _a = verA:match("^cvs%.");
+	local _b;
+	-- And indexers.
+	local ia, ib;
+	print("Testing cvs prefix");
+	if _a ~= verB:match("^cvs%.") then
+		return _a and 1 or -1;
+	end
+	ia = _a and 5 or 1;
+	ib = ia;
+	-- Main version 
+	print("Testing numeric version part");
+	while true do
+		print("a", verA:sub(ia), "b", verB:sub(ib));
+		_a = verA:match("^%d+", ia);
+		_b = verB:match("^%d+", ib);
+		assert(_a and _b, "Invalid version string: malformed numeric component");
+		ia = ia + #_a;
+		ib = ib + #_b;
+		_a = tonumber(_a);
+		_b = tonumber(_b);
+		if _a ~= _b then
+			print("_a", _a, "_b", _b);
+			return _a - _b;
+		end
+		_a = verA:match("^%.", ia);
+		_b = verB:match("^%.", ib);
+		if _a ~= _b then
+			print("_a", _a, "_b", _b);
+			return _a and 1 or -1;
+		end
+		-- Not a dot.
+		if not _a then
+			break;
+		end
+		-- Next component.
+		ia = ia + 1;
+		ib = ib + 1;
+	end
+	-- Letter component.
+	print("Testing letter suffix");
+	_a = verA:match("^[a-z]", ia);
+	_b = verB:match("^[a-z]", ib);
+	if _a then ia = ia + 1; end
+	if _b then ib = ib + 1; end
+	if _a ~= _b then
+		if _a and _b then
+			print("_a", _a, "_b", _b);
+			return string.byte(_a) - string.byte(_b);
+		else
+			print("_a", _a, "_b", _b);
+			return _a and 1 or -1;
+		end
+	end
+	_a = nil;
+	_b = nil;
+	-- Release suffix
+	-- Two more accumulators.
+	print("Testing release suffix");
+	local __a, __b;
+	if ia <= #verA then
+		_a, __a = verA:match("^_(%a+)(%d*)$", ia);
+		assert(_a, "Invalid version string: malformed release suffix");
+	end
+	if ib <= #verB then
+		_b, __b = verB:match("^_(%a+)(%d*)$", ib);
+		assert(_b, "Invalid version string: malformed release suffix");
+	end
+	if _a == nil then
+		_a = 0;
+		__a = -1;
+	else
+		_a = assert(sfxvalue[_a], "Invalid version string: unknown release suffix "..(_a or ""));
+		if __a == nil then
+			__a = 0;
+		end
+	end
+	if _b == nil then
+		_b = 0;
+		__b = -1;
+	else
+		_b = assert( sfxvalue[_b], "Invalid version string: unknown release suffix "..(_b or ""));
+		if __b == nil then
+			__b = 0;
+		end
+	end
+	print(_a, __a, _b, __b);
+	if _a ~= _b then
+		return _a - _b;
+	end
+	return tonumber(__a) - tonumber(__b);
+end
+_M.cmp_versions = cmp_versions;
+
 -- Extends the require() function with version-checking support.
 -- Usage:
 -- local _ = require("require");
