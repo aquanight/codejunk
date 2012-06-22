@@ -341,7 +341,6 @@ sub unreal3_whois_modes {
 		Irssi::signal_stop();
 		return;
 	}
-	Irssi::print("[" . $numeric . " $args]");
 }
 
 sub insp_chan_badword {
@@ -411,24 +410,36 @@ sub whois_connecting_from {
 	Irssi::print("[" . $numeric . " $args]");
 }
 
+sub sig_ssl_fingerprint {
+	local $_;
+	my ($server, $args, $nick, $address) = @_;
+	return unless $server->{version} =~ m/^InspIRCd-2/;
+	return unless $args =~ m/^[^ ]+ [^ ]+ :has client certificate fingerprint ([[:xdigit:]]+)$/;
+	my $fp = $1;
+	$server->printformat("", MSGLEVEL_CRAP, 'insp20_fingerprint', $fp);
+	Irssi::signal_stop();
+}
+
 sub sig_whois_default_event {
 	local $_;
 	my ($server, $args, $nick, $address) = @_;
 	my $numeric = Irssi::parse_special('$H');
-	if ($numeric == 379 && $server->{version} =~ m/^Unreal3\./) {
+	if ($numeric == 379 && $server->{version} =~ m/^(?:Unreal3\.|InspIRCd)/) {
 		goto &unreal3_whois_modes;
 	} elsif ($numeric == 378 && $server->{version} =~ m/^(?:Unreal[34]\.|InspIRCd)/) {
 		goto &whois_connecting_from;
 	} elsif ($numeric == 312 || $numeric == 326 || $numeric == 327 || $numeric == 377 || $numeric == 317 || $numeric == 310 || $numeric == 319 || $numeric == 330) {
 		return; # Default printing is fine for these (for now).
-	} elsif ($numeric == 671 && $server->{version} =~ m/^Unreal[34]\./) {
+	} elsif ($numeric == 671 && $server->{version} =~ m/^(Unreal[34]\.|InspIRCd)/) {
 		# is a secure connection
 		return;
+	} elsif ($numeric == 276 && $server->{version} =~ m/^InspIRCd-2/) {
+		goto &sig_ssl_fingerprint;
 	} elsif (($numeric == 307 || $numeric == 320) && $server->{version} =~ m/^(?:Unreal[34]\.|InspIRCd)/) {
 		# is a registered nick
 		return;
 	}
-	Irssi::print("[" . $numeric . " $args]");
+	Irssi::print("WHOIS: [" . $numeric . " $args]");
 }
 
 sub insp_jointhrottle {
@@ -498,11 +509,14 @@ my %format = (
 		'insp_msg_censored' => 'Cannot send a message containing {ban $1} to {channel $0}',
 		# $0 = channel name
 		'insp_jointhrottle' => 'Cannot join {channel $0} - it is unavailable',
+		# $0 = fingerprint
+		'insp20_fingerprint' => '{whois fngrprnt $0}',
 );
 
 sub sig_default_event {
 	my ($server, $data, $nick, $address) = @_;
 	return unless defined($data);
+	return if $data =~ /^379/; # Dunno why 379 isn't sigstopping.
 	if (defined($server)) {
 		$server->print("", ($nick ne $server->{real_address} ? "[$nick] [" : "[") . $data . "]", MSGLEVEL_CRAP);
 	} else {
@@ -535,6 +549,7 @@ Irssi::signal_add("event 941", \&insp_chan_badword);
 Irssi::signal_add("event 940", \&insp_end_badword);
 Irssi::signal_add("event 936", \&insp_msg_censored);
 Irssi::signal_add("event 609", \&insp_jointhrottle);
+Irssi::signal_add("event 276", \&sig_ssl_fingerprint);
 Irssi::signal_add("whois default event", \&sig_whois_default_event);
 
 Irssi::signal_add("default event", \&sig_default_event);
