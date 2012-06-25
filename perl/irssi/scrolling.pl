@@ -10,7 +10,13 @@ use Irssi::TextUI;
 
 This script adds a few enhancements to irssi scrollback.
 
+=head2 Usage
+
+Install into irssi script directory, and run /run scrolling. Then see below for commands and settings.
+
 =head2 Commands
+
+=over
 
 =item /scrollback search
 
@@ -22,9 +28,13 @@ The -forward switch causes the command to search downward instead.
 
 The -rx switch causes <rx> to be treated as a regular expression.
 
+=back
+
 =head2 Settings
 
 Several settings are added under the 'scrolling' header:
+
+=over
 
 =item auto_scrolldown
 
@@ -48,7 +58,18 @@ Boolean setting. By default this is off, and commands, and text lines escaped wi
 above settings. If turned on, commands are affected, with the exception of the /scrollback command (so that you can
 say '/scrollback end'). Note that in this case, /scrollback must be typed out: aliases will not work.
 
+=back
+
 =cut
+
+our $VERSION = 1;
+
+our %IRSSI = (
+	author => qw(aquanight),
+	license => 'public domain',
+	description => "Enhances irssi scrollback",
+	name => 'scrolling'
+);
 
 sub sig_send_cmd($$$)
 {
@@ -120,8 +141,9 @@ sub cmd_scrollback_search($$$)
 		};
 		if ($@)
 		{
-			$@ =~ s/ at .* line \d+$//;
-			Irssi::print("Error in regular expression: $@");
+			$@ =~ s/ at .* line \d+\.$//;
+			Irssi::print("Error in regular expression: $@", MSGLEVEL_CLIENTERROR);
+			return;
 		}
 	}
 	else
