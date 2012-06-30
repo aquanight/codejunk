@@ -59,14 +59,14 @@ if not _G._VERSION:match("Lua 5%.2") then
 			exp = 0;
 			repeat
 				local ip, _ = math.modf(mant);
-				if ip < 1 then
+				if ip < 8 then
 					mant = mant * 2;
 					exp = exp - 1;
 				elseif ip >= 16 then
 					mant = mant / 2;
 					exp = exp + 1;
 				end
-			until (mant >= 1 and mant < 16)
+			until (mant >= 8 and mant < 16)
 			while mant ~= 0 do
 				local ip, fp = math.modf(mant);
 				if str then
