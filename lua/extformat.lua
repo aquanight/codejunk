@@ -72,7 +72,7 @@ if not _G._VERSION:match("Lua 5%.2") then
 				if str then
 					str = str .. _fmt(upper and "%1.1X" or "%1.1x", ip);
 				else
-					str = _fmt(upper and "%1.1X" or "%1.1x.", ip);
+					str = _fmt(upper and "%1.1X." or "%1.1x.", ip);
 				end
 				if prec then
 					prec = prec - 1
