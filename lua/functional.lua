@@ -15,7 +15,6 @@ end
 local sprintf = string.format;
 
 local proto = require("prototype");
-local capab = require("capab");
 
 -- Don't pull in all of 5.2's fun, just define our pack here.
 local function pack(...)
@@ -86,9 +85,7 @@ end
 -- Wraps the multiple results of a function into a table.
 function _M.tabulate(fn)
 	assert(type(fn) == "function", sprintf("bad argument #1 to 'tabulate' (function expected, got %s)", type(fn)));
-	return function(...)
-		return pack(fn(...));
-	end
+	return fn:chain(pack);
 end
 
 if getfenv then
@@ -102,7 +99,12 @@ _M.getinfo = debug.getinfo;
 _M.getupvalue = debug.getupvalue;
 _M.setupvalue = debug.setupvalue;
 
--- Produces a real function from a callable object. Call this directly if you want it.
+-- Produces a real function from a callable object. Call this directly if you want it:
+-- local fn = functional.make_function(obj);
+-- If you didn't capture the library table, any one of these will work:
+-- debug.getmetatable(print).make_function(obj)
+-- package.loaded.functional.make_function(obj)
+-- require("functional").make_function(obj) -- Effectively the same as the previous
 function _M.make_function(fn)
 	if type(fn) == "function" then
 		return fn
@@ -140,7 +142,7 @@ end
 function _M.iterate(fn, ...)
 	assert(type(fn) == "function", sprintf("bad argument #1 to 'iterate' (function expected, got %s)", type(fn)));
 	local arg = pack(...);
-	assert(arg[1] == nil or capab.is_natural_number(arg[1]), "bad argument #2 to 'iterate' (count expected)");
+	assert(arg[1] == nil or (type(arg[1]) == "number" and arg[1] > 0 and math.modf(arg[1]) == arg[1]), "bad argument #2 to 'iterate' (count expected)");
 	local argct = arg[1] or 1;
 	return function(...)
 		local args = pack(...);
