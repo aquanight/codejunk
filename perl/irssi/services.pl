@@ -218,8 +218,44 @@ sub sig_setup_reread {
 }
 
 #### Commands ####
+sub cmd_identify
+{
+	my ($args, $server, $witem) = @_;
+	my (@args) = split / /, $args, 2;
+	my $tag = shift(@args);
+	if (defined($tag) && $tag ne "" && $tag ne "*")
+	{
+		$server = Irssi::server_find_tag("$tag");
+		unless (defined($server))
+		{
+			Irssi::print("Unknown tag '$tag'");
+			return;
+		}
+	}
+	if (!defined($server) || !$server->{connected})
+	{
+		Irssi::signal_emit("error command", 4); # Not connected to server
+		return;
+	}
+	if ($#args > 0)
+	{
+		local $/ = " ";
+		$server->send_raw("IDENTIFY @args");
+	}
+	else
+	{
+		my $data = $serviceData->{$server->{chatnet}};
+		unless (defined($data) && defined($data->{nickpass}))
+		{
+			Irssi::print("No identification set up for chatnet " . $server->{chatnet});
+			return;
+		}
+		Irssi::print("Identifying on " . $server->{tag});
+		process_command_list($server, $data->{nickpass});
+	}
+}
 
-
+Irssi::command_bind(identify => \&cmd_identify);
 
 #### Message Formats ####
 my @formats = (
