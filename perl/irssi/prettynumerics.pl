@@ -413,7 +413,7 @@ sub whois_connecting_from {
 sub sig_ssl_fingerprint {
 	local $_;
 	my ($server, $args, $nick, $address) = @_;
-	return unless $server->{version} =~ m/^InspIRCd-2/;
+	return unless $server->{version} =~ m/^InspIRCd-2|ircd-seven/;
 	return unless $args =~ m/^[^ ]+ [^ ]+ :has client certificate fingerprint ([[:xdigit:]]+)$/;
 	my $fp = $1;
 	$server->printformat("", MSGLEVEL_CRAP, 'insp20_fingerprint', $fp);
@@ -426,14 +426,14 @@ sub sig_whois_default_event {
 	my $numeric = Irssi::parse_special('$H');
 	if ($numeric == 379 && $server->{version} =~ m/^(?:Unreal3\.|InspIRCd)/) {
 		goto &unreal3_whois_modes;
-	} elsif ($numeric == 378 && $server->{version} =~ m/^(?:Unreal[34]\.|InspIRCd)/) {
+	} elsif ($numeric == 378 && $server->{version} =~ m/^(?:Unreal[34]\.|InspIRCd|ircd-seven)/) {
 		goto &whois_connecting_from;
 	} elsif ($numeric == 312 || $numeric == 326 || $numeric == 327 || $numeric == 377 || $numeric == 317 || $numeric == 310 || $numeric == 319 || $numeric == 330) {
 		return; # Default printing is fine for these (for now).
-	} elsif ($numeric == 671 && $server->{version} =~ m/^(Unreal[34]\.|InspIRCd)/) {
+	} elsif ($numeric == 671 && $server->{version} =~ m/^(Unreal[34]\.|InspIRCd|ircd-seven)/) {
 		# is a secure connection
 		return;
-	} elsif ($numeric == 276 && $server->{version} =~ m/^InspIRCd-2/) {
+	} elsif ($numeric == 276 && $server->{version} =~ m/^InspIRCd-2|ircd-seven/) {
 		goto &sig_ssl_fingerprint;
 	} elsif (($numeric == 307 || $numeric == 320) && $server->{version} =~ m/^(?:Unreal[34]\.|InspIRCd)/) {
 		# is a registered nick
