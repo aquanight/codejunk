@@ -163,6 +163,8 @@ sub cmd_scrollback_search($$$)
 			return;
 		}
 	}
+	# Not found.
+	Irssi::signal_emit("beep");
 }
 
 Irssi::command_bind("scrollback search", \&cmd_scrollback_search);
