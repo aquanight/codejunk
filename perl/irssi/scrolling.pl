@@ -26,9 +26,25 @@ Syntax: /scrollback search [-forward] [-rx] <item>
 
 The -forward switch causes the command to search downward instead.
 
-The -rx switch causes <rx> to be treated as a regular expression.
+The -rx switch causes <item> to be treated as a regular expression.
 
 =back
+
+=over
+
+=item /scrollback quote
+
+Syntax: /scrollback quote [-rx] [-view] [-#] <item>
+
+Retrieves the line containing <item> and places it into the current input line.
+
+By default, starts at the bottom of the current buffer and stops at the top. -view restricts the search to the currently visible text.
+Without -view, if the window is not scrolled all the way down, and a match is found below the current view, and the 'beep_if_scrolled' option
+is set, a bell is sounded.
+
+If -rx is used, <item> is a regular expression. If <item> has a capture, the first captured string is inserted, instead of the entire line.
+
+If -# is used, it finds the #th such line. By default # is 1.
 
 =head2 Settings
 
@@ -167,8 +183,76 @@ sub cmd_scrollback_search($$$)
 	Irssi::signal_emit("beep");
 }
 
+my $repl_line = undef;
+sub cmd_scrollback_quote($$$)
+{
+	my ($args, $server, $witem) = @_;
+	my $window = Irssi::active_win();
+	return unless defined $window;
+	my $view = $window->view();
+	return unless defined $view;
+	my $rx = "";
+	my $ct = 1;
+	my $opts;
+	($opts, $args) = Irssi::command_parse_options("scrollback quote" => $args);
+	$opts//return;
+	$rx = exists($opts->{rx});
+	$ct = $opts->{"#"}//1;
+	unless (eval {$ct += 0})
+	{
+		warn "Non numeric item count: $ct";
+		return;
+	}
+	my $pat;
+	$args =~ s/\s*$//;
+	if ($rx)
+	{
+		eval
+		{
+			$pat = qr/$args/;
+		};
+		if ($@)
+		{
+			$@ =~ s/ at .* line \d+\.$//;
+			Irssi::print("Error in regular expression: $@", MSGLEVEL_CLIENTERROR);
+			return;
+		}
+	}
+	else
+	{
+		$pat = qr/\Q$args\E/i;
+	}
+	my $ln;
+	$repl_line = undef;
+	for ($ln = $view->{buffer}->{cur_line}; defined($ln); $ln = $ln->prev())
+	{
+		my $txt = $ln->get_text(0);
+		if ($txt =~ $pat)
+		{
+			--$ct and next;
+			my $inp = $1//$txt;
+			$repl_line = $inp;
+			last;
+		}
+	}
+	$repl_line//Irssi::signal_emit("beep");
+}
+
+sub key_send_line
+{
+	my ($data, $guidata, $info) = @_;
+	$repl_line//return;
+	Irssi::gui_input_set($repl_line);
+	$repl_line = undef;
+}
+
 Irssi::command_bind("scrollback search", \&cmd_scrollback_search);
 Irssi::command_set_options("scrollback search" => "forward rx");
+
+Irssi::command_bind("scrollback quote" => \&cmd_scrollback_quote);
+Irssi::command_set_options("scrollback quote" => 'rx #');
+
+Irssi::signal_add_last("key send_line" => \&key_send_line);
 
 Irssi::signal_add("send command", \&sig_send_cmd);
 
