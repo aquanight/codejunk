@@ -13,6 +13,20 @@ our %IRSSI = (
 	license => 'public domain',
 );
 
+sub ncpu()
+{
+	my $fh;
+	my $_;
+	open $fh, "<", "/proc/cpuinfo" or do { warn "Can't open /proc/cpuinfo: $!\n"; return 1 };
+	my $ncpu = 0;
+	while (<$fh>)
+	{
+		/^processor\s+:/ and ++$ncpu;
+	}
+	close $fh;
+	return $ncpu or do { warn "Couldn't find any CPUs!"; 1 };
+}
+
 sub cmd_uptime
 {
 	my ($data, $server, $witem) = @_;
@@ -27,7 +41,7 @@ sub cmd_uptime
 		{
 			$line = <$fh>;
 			my ($up, $idle) = split / /, $line;
-			$idle/=2;
+			$idle/=ncpu();
 			close $fh;
 			Irssi::print sprintf("System up %s, idle %s [%.2f%%]", format_duration($up), format_duration($idle), ($idle * 100 / $up)), MSGLEVEL_CLIENTNOTICE;
 		}
