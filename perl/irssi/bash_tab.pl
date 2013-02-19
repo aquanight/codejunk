@@ -63,8 +63,8 @@ sub longest_common_stem(@)
 	scalar(@words) < 2 and return $words[0];
 	grep {/\n/} @words and die "No newlines allowed";
 	my $content = join "\n", @words;
-	# What this regex is doing is we join the words into a space-seperated string. As this is being used for irssi tab completion
-	# spaces should never occur in the strings proper. (We assert this above.)
+	# What this regex is doing is we join the words into a newline-seperated string. As this is being used for irssi tab completion
+	# newlines should never occur in the strings proper. (We assert this above.)
 	# We capture the leading portion of the first word, then require that every word thereafter starts with the same leading portion.
 	# The use of greedy captures ensures we get the longest possible result.
 	my ($stem) = $content =~ /^([^\n]*)[^\n]*(\n\1[^\n]*)+$/i;
