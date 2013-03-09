@@ -125,6 +125,12 @@ would be allowed normally:
   - Is of type nullptr_t (such as the nullptr literal) - this always yields a
     null pointer.
   Each such criteria results in a null pointer.
+  Note that functions declared constexpr can be used, so long as they
+  ultimately evaluate to either an integer 0, a null pointer, or a result of
+  type nullptr_t. Constant objects can be used, if they have a constexpr cast
+  operator to any integer or pointer type or nullptr_t, and the result is a
+  null pointer. This is the only time a cast operator can be used as part of
+  an explicit-required parameter.
 - Cast of a function pointer, where only the following changes occur:
   - Argument type changes are as if the target argument was 'explicit' and the
     original argument was the type a prospective parameter, and such a cast is
@@ -136,6 +142,8 @@ would be allowed normally:
     to a variable of the original type. See below on 'explicit' return types.
   Note that these restrictions may apply even to a non-explicit function
   pointer type.
+  Exception: if the pointer is a constant expression evaluating to a null
+  pointer, it is allowed regardless of changes.
 - Cast of a pointer-to-member, such that the associated class of the pointer
   type is changed to a derived type of the original pointer, or that the
   object type of the member pointer is changed in a manner that would be
@@ -257,6 +265,27 @@ bar(
 	      // away.
 );
 
+In any case, the 'explicit' mechanics can be bypassed by providing - what
+else? - an explicit cast.
+
+func((double)3, 4);
+
+Calls overload 2 now, the explicit cast means parameter 1 is of type 'double'
+and we have an exact match, even though 3 was originally an int and wouldn't
+have been converted implicitly. The "not allowed" bar call could be worked
+around thusly:
+bar(
+	(B)c, // Forces typecut of c to type B. Now is type B and valid.
+	(C&)b, // If the compiler accepts this unsafe explicit cast, it
+	       // will then accept it as an argument.
+	(int)'A', // Forces cast of 'A' to integer value (65), now valid.
+	reinterpret_cast<B*>("hello"), // Yup, works too.
+	(double*)((void*)bar), // Compilers may scream at the trickery 
+	                       // of turning function pointer into data
+			       // pointer but otherwise works.
+	(char*)argv, // Works. argv[0] would too.
+);
+
 Prohibit implicit conversions of the return value
 
 The fourth use of 'explicit' is applied to a function's non-void return type.
@@ -272,8 +301,7 @@ type, except those allowed for an explicit argument. Repeated for clarity:
   literals from 'unsigned int' to 'unsigned short'.
 Types of casts not allowed:
 - Casts involving primitive types, whether directly or as the object of a
-  reference or pointer. Note that even functions defined as 'constexpr' cannot
-  be cast to a pointer, not even in the case it returns 0.
+  reference or pointer. 
 - By-value casts between any two types. Even if the types are related by
   inheritance, and even if (especially if) there is a user-defined conversion
   operator or unary constructor.
@@ -290,13 +318,24 @@ The statement:
 
 square(4);
 
-explicit-should-do-more.txt:269:error: Implicit cast of 'int' to 'void'
+explicit-should-do-more.txt:319:error: Implicit cast of 'int' to 'void'
 	restricted by 'explicit' declaration on return type.
-explicit-should-do-more.txt:265:See declaration here
+explicit-should-do-more.txt:315:See declaration here
 
 This has the side effect that an explicit-d return type cannot be silently
 ignored by calling the function as a statement - the return value *must* be
 assigned or otherwise used.
+
+This means that:
+x = (square(4), square(9));
+
+Is invalid, since the left side of , is attempting an implicit void cast.
+
+That said,
+
+(void)square(4);
+
+As useless as it is, is perfectly fine.
 
 Prohibit invocation on derived objects.
 
@@ -305,7 +344,9 @@ This one is perhaps of limited usefulness. It creates a method that is sort of
 a derived class unless you know what you're doing' type of deal.
 
 The fifth use of explicit positions at after the argument list, where
-this-pointer cv-qualifications can go:
+this-pointer cv-qualifications can go. Order relative to the existing
+cv-qualifiers is irrelevent (explicit const, const explicit, const explicit
+volatile, etc all are valid).
 
 int method() explicit { ... }
 
@@ -326,7 +367,8 @@ ride) as well as of the defining type.
 The derived class can also shadow the base method with its own definition, or
 if the method is virtual, it can override it. Both have the effect of lifting
 the 'explicit' limitations, but now the derived class's method is called
-through derived objects, pointers, and references.
+through derived objects, pointers, and references (and base pointers and
+references, in the case of overriden virtuals).
 
 Alternatively, the method can be selected by qualified method name:
 
@@ -358,7 +400,224 @@ static_cast<base*>(p3)->thing(); // Valid, same as p1->thing()
 dynamic_cast<_drv*>(p1)->thing(); // Invalid, explicit cast required.
 dynamic_cast<deriv*>(p1)->thing(); // Valid, same as p2->thing()
 
-Note that you couldn't do this to a constructor, since constructors don't have
-a this-pointer cv-qual field. It would only have been of use on a default or
-copy constructor to force a derived class to declare its own and delegate
-explicitly. Which doesn't really serve any purpose.
+Note that you couldn't do this to a constructor. It would only have been of
+use on a default or copy constructor to force a derived class to declare its
+own and delegate explicitly. Which doesn't really serve any purpose.
+
+You also can't do it to a destructor either, for the same reason, plus it
+makes destructing the object complicated considering automatic variables and
+new/delete statements.
+
+Even though fields and static methods have no cv-qualifier field, explicit is
+additionally permitted to be used for these items in the same way:
+
+class Foo
+{
+	public:
+		int var explicit;
+		static const int FOO_VALUE explicit = 42;
+		// To remember this, think of a pure virtual's declaration
+		// with cv-qualifiers, and take out the parameter list.
+
+		static void Bar() explicit;
+};
+
+The instance field, 'var', can only be accessed (even though public) through
+objects, pointers, or references to Foo, or with explicit qualification (Baz
+baz; baz.Foo::var = 42;).
+
+Static members get extra treatment when modified with explicit this way. A
+static method or field can only *ever* be accessed through the class-qualified
+invocation syntax to that static member: it is invalid to reference a static
+member through an object, even implicitly via the 'this' pointer in instance
+methods. In this specific case, explicit also becomes sufficient grounds for
+overloading, much like cv-qualifiers do for instance methods:
+
+class Sample
+{
+public:
+	Sample& ObjectOptional(); // Called on normal objects.
+	Sample const & ObjectOptional() const; // Called on const objects.
+	static void ObjectOptional() explicit; // Called on class
+
+	// This is a rare case where a FIELD can be overloaded:
+	static int size explicit;
+	int size;
+
+	//(You might then have Sample::size be a default size for new
+	//instances like so:)
+	Sample() : size(Sample::size) {}
+};
+
+The class-qualification is required even inside the function body for the
+class's instance methods, hence why we must say Sample::size to refer to the
+static field in the constructor's initializer, but it is *not* required inside
+function bodies for static methods (since they need explicit objects to access
+instance members). This is the same reason why we can have an instance field
+'size' and a static field 'size' - without the explicit modifier, this would
+not be allowed.
+
+One consequnce of "overloading" instance and static methods this way is that
+the class-qualified syntax of invocation will always call the static method,
+unless an object is provided:
+
+class Base { public: static void Foo() explicit; void Foo() explicit; };
+class Derived : public Base;
+
+Within Base, calling Base::Foo() calls the static method, and Foo() calls the
+instance method. Within Derived, Foo() is not valid (because explicit
+inhibits calls via a derived class), but Base::Foo() calls the static method.
+In this case, to call the instance method, Derived must use the syntax
+this->Base::Foo() to force instance invocation (the compiler now cannot
+consider the static method), and provide class qualification to get past the
+'explicit' restriction.
+
+One useful consequence of this is that static fields and methods could be
+marked 'explicit' to inhibit mistakes involving derived classes:
+
+class Base {
+	public:
+		static void foo(double x);
+};
+
+class Derived: public Base {
+	public:
+		void foo(int x);
+};
+
+In this example:
+
+Derived* p = nullptr;
+(p = new Derived())->foo(3.4);
+p->foo(42);
+
+In the second call to foo, p is a null pointer, because the statement with the
+first call resolved the call (Derived*)->foo(double) to Base::foo(double) - a
+static method, which means the object expression of -> doesn't get evaluated
+to construct p.
+
+To solve this, Base can mark foo explicit:
+
+@@
+-		static void foo(double x);
++		static void foo(double x) explicit;
+
+Now:
+
+(p = new Derived())->foo(3.4);
+
+Calls Derived::foo(int), truncating 3.4 to 3. The explicit modifier on
+Base::foo means an explicit class name is required to call it, and furthermore
+it is invalid to use an object to do so: only:
+
+Base::foo(3.4);
+
+Would be a valid call.
+
+Final Word:
+
+You can mix all these new uses for explicit:
+
+class Sillyness
+{
+public:
+	explicit static int sillyfunc(explicit double x) explicit;
+}
+
+class NotSilly: public Sillyness
+{
+};
+
+NotSilly ns;
+
+cout << ns.sillyfunc(3.4); // Invalid, inherited method reuqires explicit base
+cout << ns.Sillyness::sillyfunc(3.4); // Invalid, static method is explicit
+cout << Sillyness::sillyfunc(3.4); // Valid
+cout << Sillyness::sillyfunc(3); // Invalid: arg#1 int->double requires cast
+Sillyness::sillyfunc(4); // Invalid: return int->void requires cast
+long x = Silllyness::sillyfunc(4); // Invalid: return int->long requires cast
+
+// But remember the allowances:
+void foo(explicit Sillyness* s);
+void bar(explicit short s);
+
+foo(nullptr); // Allowed nullptr_t -> Sillyness*
+foo(0); // Allowed constant expression int == 0 -> null pointer Sillyness*
+const void* NULL = 0;
+foo(NULL); // Allowed, constant expression void* null pointer
+
+// nullptr_t isn't all that special in the allowances either:
+class MyCustomNullPtr
+{
+	constexpr MyCustomNullPtr();
+	template <typename T>
+	constexpr operator T*() const { return static_cast<T*>(0); }
+};
+const MyCustomNullPtr mynull;
+// Object constructor is constexpr, so const object is a constant expression.
+// Consequently, the cast operator, also declared constexpr, is
+// constant-expression compatible. It returns a null pointer, therefore...
+foo(mynull); // Valid!
+
+bar(45); // Allowed to cast small int *LITERALS ONLY* to short.
+
+const int hundredpi = 314;
+
+bar(hundredpi); // FAIL: While 314 fits, it needs a cast unless a literal.
+bar(314); // Perfectly fine.
+
+bar(~0); // Not fine. A good way to get 0xFFFF, but it's not a literal.
+bar(0xFFFFFFFF); // Equivalent, and equivalently not fine, it's too big.
+
+Remember the signedness and corresponding capacity when dealing with shorts,
+especially if using hex notation!
+bar(0xFFFF);
+Fails! 0xFFFF is still int, and thus is 65535, too big for a float. You need
+to say:
+bar(-32768);
+Or cast it explicitly:
+bar((short)0xFFFF);
+
+Watch out! What looks like one thing to you may look like another to the
+compiler!
+
+#define ENOENT 2
+bar(ENOENT);
+
+ENOENT looks like a non-literal constant, and not allowed for explicit short.
+But it's really a preprocessor macro, and the compiler only sees:
+bar(2)
+
+Which is allowed. Thus bar(ENOENT) is allowed, but it's not if ENOENT is
+defined via const statement instead of a macro.
+
+But remember that only literals are allowed this. If ENOENT was defined with
+expression guards as generally recommended of a preprocessor macro:
+#define ENOENT (2)
+
+Then now the compiler sees:
+bar((2))
+Which is not a literal anymore (it's an expression, involving a parenthesized
+expression containing a literal, so it's still a constant expression). Thus it
+fails. Don't rely on preprocessor macros playing nicely with explict. Use
+explicit casts with preprocessor macros. Compilers are free to issue warnings
+(ONLY) if it can detect that a preprocessor macro is used without a cast but
+passes through the int->short literal allowance.
+
+Remember that in this allowance, that signedness must still be matched:
+
+void foo(explicit unsigned short x);
+void bar(explicit short x);
+
+foo(34); // Fail, needs U suffix or cast.
+foo(34U); // Fine.
+bar(34); // Fine.
+bar(34U); // Fail, it's signed.
+
+double->float doesn't get an allowance, since there's an 'f' suffix.
+
+void baz(explicit float x);
+
+baz(3.4); // Nope. Needs a cast.
+baz(3.4f); // Works fine.
+
