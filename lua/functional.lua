@@ -7,19 +7,47 @@
 
 local _M = {};
 
+-- Don't pull in all of 5.2's fun, just define our pack here.
+-- We need this because we deal with vararg a lot.
+local function pack(...)
+	return { n = select("#", ...), ... };
+end
+
+-- Make unpack use table["n"] by default, instead of #table.
+-- We don't ask for bounds. If bounds are to be used, use _unpack
+-- to skip the extra function call.
 local _unpack = unpack or table.unpack; -- 5.1 gets unpack, 5.2 gets table.unpack
 local function unpack(tbl)
 	assert(type(tbl) == "table");
 	if tbl.n then return _unpack(tbl, 1, tbl.n) else return _unpack(tbl); end
 end
+
+-- Append contents from one array to another.
+local function tappend(tdest, tsrc)
+	assert(type(tdest) == "table" and type(tsrc) == "table");
+	local st = tonumber(tdest.n) or #tdest;
+	for i = 1, (tonumber(tsrc.n) or #tsrc), 1 do
+		tdest[st + i] = tsrc[i];
+	end
+	tdest.n = st + (tsrc.n or #tsrc);
+	return tdest;
+end
+
+-- Unpack multiple tables into a single sequence.
+local function multiunpack(...)
+	local tbls = pack(...);
+	local bld = { n = 0 };
+	for i = 1, tbls.n, 1 do
+		local tbl = bld;
+		assert(type(tbl) == "table");
+		tappend(bld, tbl);
+	end
+	return unpack(bld)
+end
+
 local sprintf = string.format;
 
 local proto = require("prototype");
-
--- Don't pull in all of 5.2's fun, just define our pack here.
-local function pack(...)
-	return { n = select("#", ...), ... };
-end
 
 -- A function that does nothing. You'll see what this is for.
 local function dummy()
@@ -37,6 +65,19 @@ end
 _M.try = pcall;
 _M.pcall = pcall;
 
+-- Calls a function, passing the specified parameter.
+-- If the function's first return value is false or nil, the second is used as an error message.
+-- If the function returned no values, does nothing.
+-- Otherwise all values are returned.
+function _M.assert(fn, ...)
+	local res = pack(fn(...))
+	if res.n > 0 and not res[1] then
+		error(res[2]);
+	else
+		return unpack(res);
+	end
+end
+
 -- Maps a function by locking in leading parameters, and returns a function that expects the remainder.
 -- F.ex local fn = print:map("hello");
 -- fn("world") -> print("hello", "world");
@@ -44,7 +85,8 @@ function _M.map(fn, ...)
 	assert(type(fn) == "function", sprintf("bad argument #1 to 'map' (function expected, got %s)", type(fn)));
 	local init_arg = pack(...);
 	return function(...)
-		return fn(unpack(init_arg), ...);
+		local added_args = pack(...);
+		return fn(multiunpack(init_arg, added_args));
 	end;
 end
 
@@ -77,8 +119,9 @@ function _M.mutate(fn, mut, start)
 	return function(...)
 		local arg = pack(...);
 		local sta = (start > 0 and start or ((arg.n + 1) - start));
+		local untouched = (sta ~= 1 and _unapck(arg, 1, sta - 1) or {});
 		local res = pack(mut(_unpack(arg, sta, arg.n)));
-		return fn(_unpack(arg, 1, sta - 1), unpack(res));
+		return fn(multiunpack(untouched, res));
 	end
 end
 
@@ -102,7 +145,7 @@ _M.setupvalue = debug.setupvalue;
 -- Produces a real function from a callable object. Call this directly if you want it:
 -- local fn = functional.make_function(obj);
 -- If you didn't capture the library table, any one of these will work:
--- debug.getmetatable(print).make_function(obj)
+-- (function() end).make_functional(obj)
 -- package.loaded.functional.make_function(obj)
 -- require("functional").make_function(obj) -- Effectively the same as the previous
 function _M.make_function(fn)
@@ -134,27 +177,6 @@ function _M.rearrange(fn, ...)
 			if v > arglist.n then arglist.n = v; end
 		end
 		return fn(unpack(arglist));
-	end
-end
-
--- Calls a function repeatedly, passing it each argument in turn. The return value is combination of all values returned from each iteration.
--- The second parameter specifies maximum # of arguments to use each time, and defaults to 1.
-function _M.iterate(fn, ...)
-	assert(type(fn) == "function", sprintf("bad argument #1 to 'iterate' (function expected, got %s)", type(fn)));
-	local arg = pack(...);
-	assert(arg[1] == nil or (type(arg[1]) == "number" and arg[1] > 0 and math.modf(arg[1]) == arg[1]), "bad argument #2 to 'iterate' (count expected)");
-	local argct = arg[1] or 1;
-	return function(...)
-		local args = pack(...);
-		local res = { n = 0 };
-		for ix = 1, args.n, argct do
-			local _ = pack(fn(_unpack(args, ix, ix + (argct - 1))));
-			for rx = 1, _.n do
-				table.insert(res, _[rx]);
-			end
-			res.n = res.n + _.n
-		end
-		return unpack(res);
 	end
 end
 
