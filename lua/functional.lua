@@ -47,8 +47,6 @@ end
 
 local sprintf = string.format;
 
-local proto = require("prototype");
-
 -- A function that does nothing. You'll see what this is for.
 local function dummy()
 	local _ = 42;
@@ -94,8 +92,11 @@ end
 -- are passed to the first function. Subsequent functions are called with the return value(s) from
 -- the previous. The final function's results are returned.
 function _M.chain(fn, ...)
-	assert(proto.typesof(fn, ...):match("^f*$"), "bad argument to 'chain' (only functions allowed)");
+	assert(type(fn) == "function", sprintf("bad argument #1 to 'chain' (function expected, got %s)", type(fn)));
 	local chain_list = pack(...);
+	for i = 1, chain_list.n, 1 do
+		assert(type(chain_list[i]) == "function", sprintf("bad argument #1 to 'chain' (function expected, got %s)", i + 1, type(chain_list[i])));
+	end
 	return function(...)
 		local res = pack(fn(...));
 		for i = 1, chain_list.n, 1 do
@@ -160,13 +161,11 @@ end
 
 -- Produces a function that calls the target with the arguments re-ordered.
 function _M.rearrange(fn, ...)
-	assert(proto.typesof(fn, ...):match("^fn*$"), "bad argument to 'rearrange' (expected a function followed by numeric arguments)");
+	assert(type(fn) == "function", sprintf("bad argument #1 to 'rearrange' (function expected, got %s)", type(fn)));
 	local argmap = pack(...);
 	for i = 1, argmap.n do
-		local ip, fp = math.modf(argmap[i]);
-		if fp ~= 0 or ip <= 0 then
-			error("Argument specifier must be a positive integer");
-		end
+		local x = tonumber(argmap[i])
+		assert(x and x == math.modf(x) and x > 0, sprintf("bad argument #%d to 'rearrange' (positive integer expected)", i + 1));
 	end
 	return function(...)
 		local inargs = pack(...);
