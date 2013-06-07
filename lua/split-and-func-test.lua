@@ -9,3 +9,7 @@ debug.getmetatable("").__div = ss.split:rearrange(2, 1);
 require("dump");
 
 print(dump("this is the song that never end yes it goes on and on my friends" / " ", "_"));
+
+print(dump(("one two three four"):split(" ", 2)));
+
+print(dump(("one two three four"):split(" ", -2)));
