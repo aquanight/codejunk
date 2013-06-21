@@ -3,9 +3,9 @@
 use strict;
 use warnings NONFATAL => 'all';
 
-sub splits($;$);
+sub splits;
 
-sub set_compare($$)
+sub set_compare
 {
 	my ($seta, $setb) = @_;
 	for (my $ix = 0; ; ++$ix)
@@ -20,7 +20,7 @@ sub set_compare($$)
 	}
 }
 
-sub scrub_duplicates(\@)
+sub scrub_duplicates
 {
 	my ($ary) = @_;
 	ref($ary) eq "ARRAY" or die;
@@ -36,7 +36,7 @@ sub scrub_duplicates(\@)
 	@$ary = @uniq;
 }
 
-sub splits($;$)
+sub splits
 {
 	my ($n, $minimum) = @_;
 	my @results;
@@ -56,7 +56,7 @@ sub splits($;$)
 			push @results, @x;
 		}
 	}
-	scrub_duplicates @results;
+	scrub_duplicates \@results;
 	return @results;
 }
 	
