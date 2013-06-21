@@ -1,25 +1,36 @@
 #!/usr/bin/perl
 
 use strict;
-use warnings FATAL => 'all';
+use warnings NONFATAL => 'all';
 
 sub splits($;$);
+
+sub set_sort($$)
+{
+	my ($seta, $setb) = @_;
+	for (my $ix = 0; ; ++$ix)
+	{
+		my ($ia, $ib) = ($seta->[$ix], $setb->[$ix]);
+		unless (defined($ia))
+		{
+			return defined($ib) ? 1 : 0;
+		}
+		return -1 unless defined $ib;
+		return $ia <=> $ib if ($ia <=> $ib) != 0;
+	}
+}
 
 sub scrub_duplicates(\@)
 {
 	my ($ary) = @_;
 	ref($ary) eq "ARRAY" or die;
-	for (my $x = 0; $x < @$ary; ++$x)
+	my %stuff;
+	for my $x (@$ary)
 	{
-		for (my $y = $x + 1; $y < @$ary; ++$y)
-		{
-			if ($ary->[$y] ~~ $ary->[$x])
-			{
-				splice @$ary, $y, 1;
-				redo;
-			}
-		}
+		# Each result is an array reference, so stringize it for the hash.
+		$stuff{join(",", @$x)} = $x;
 	}
+	@$ary = sort { set_sort($a, $b); } values(%stuff);	
 }
 
 sub splits($;$)
@@ -46,7 +57,7 @@ sub splits($;$)
 	return @results;
 }
 	
-for my $n ( 1 .. 23 )
+for my $n ( 1 .. 30 )
 {
 	my @n = splits($n);
 	print "$n -> " . scalar @n . " {";
