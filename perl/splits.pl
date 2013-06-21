@@ -5,7 +5,7 @@ use warnings NONFATAL => 'all';
 
 sub splits($;$);
 
-sub set_sort($$)
+sub set_compare($$)
 {
 	my ($seta, $setb) = @_;
 	for (my $ix = 0; ; ++$ix)
@@ -24,13 +24,16 @@ sub scrub_duplicates(\@)
 {
 	my ($ary) = @_;
 	ref($ary) eq "ARRAY" or die;
-	my %stuff;
-	for my $x (@$ary)
+	my @tmp;
+	my @uniq;
+	@tmp = sort { set_compare($a, $b); } @$ary;
+	for (my $x = 0; ; ++$x)
 	{
-		# Each result is an array reference, so stringize it for the hash.
-		$stuff{join(",", @$x)} = $x;
+		last if ($x > $#tmp); # Have to check here, for-line is skipped on redo.
+		next unless ($tmp[$x - 1] <=> $tmp[$x]);
+		push @uniq, $tmp[$x];
 	}
-	@$ary = sort { set_sort($a, $b); } values(%stuff);	
+	@$ary = @uniq;
 }
 
 sub splits($;$)
