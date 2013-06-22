@@ -1,36 +1,38 @@
 #!/usr/bin/perl
 
 use strict;
-use warnings NONFATAL => 'all';
+use warnings FATAL => 'all';
 
 sub splits;
 
-sub set_compare
+sub set_compare($$)
 {
 	my ($seta, $setb) = @_;
+	# We should not get undef sets
+	$seta//die;
+	$setb//die;
 	for (my $ix = 0; ; ++$ix)
 	{
 		my ($ia, $ib) = ($seta->[$ix], $setb->[$ix]);
 		unless (defined($ia))
 		{
-			return defined($ib) ? 1 : 0;
+			return defined($ib) ? -1 : 0;
 		}
-		return -1 unless defined $ib;
-		return $ia <=> $ib if ($ia <=> $ib) != 0;
+		return 1 unless defined $ib;
+		return ($ia <=> $ib) if ($ia <=> $ib);
 	}
 }
 
-sub scrub_duplicates
+sub scrub_duplicates(\@)
 {
 	my ($ary) = @_;
 	ref($ary) eq "ARRAY" or die;
 	my @tmp;
-	my @uniq;
-	@tmp = sort { set_compare($a, $b); } @$ary;
-	for (my $x = 0; ; ++$x)
+	@tmp = sort set_compare @$ary;
+	my @uniq = ($tmp[0]);
+	for (my $x = 1; $x <= $#tmp; ++$x)
 	{
-		last if ($x > $#tmp); # Have to check here, for-line is skipped on redo.
-		next unless ($tmp[$x - 1] <=> $tmp[$x]);
+		next unless set_compare($tmp[$x - 1], $tmp[$x]);
 		push @uniq, $tmp[$x];
 	}
 	@$ary = @uniq;
@@ -56,17 +58,18 @@ sub splits
 			push @results, @x;
 		}
 	}
-	scrub_duplicates \@results;
+	scrub_duplicates @results;
 	return @results;
 }
 	
 for my $n ( 1 .. 30 )
 {
 	my @n = splits($n);
-	print "$n -> " . scalar @n . " {";
-	foreach my $v (@n)
-	{
-		print " { " . join(", ", @$v) . " } ";
-	}
-	print "}\n";
+	print "$n -> " . scalar @n ;#. " {";
+#	foreach my $v (@n)
+#	{
+#		print " { " . join(", ", @$v) . " } ";
+#	}
+#	print "}\n";
+	print "\n";
 }
