@@ -33,7 +33,7 @@ local pzero = 0;
 local nzero = -pzero; -- Due to constant-folding, -0 doesn't work.
 local pinf = 1/pzero;
 local ninf = 1/nzero;
-if not _G._VERSION:match("Lua 5%.2") then
+if not pcall(_fmt, "%a", 47) then -- Lua 5.2 adds "%a" support but 5.1 lacks it.
 	pcta = function(val, width, prec, flags, upper)
 		local exp, mant, sign;
 		local str;
@@ -202,7 +202,7 @@ function string.format(fmt, ...)
 				spec = spec .. conv;
 				fmtarg = arg[argspec];
 			elseif conv == "a" or conv == "A" then
-				if _G._VERSION:match("Lua 5%.2") then
+				if not pcta then -- if pcta is set then we need it, otherwise we don't
 					spec = spec .. conv
 					fmtarg = arg[argspec];
 				else
