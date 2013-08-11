@@ -40,6 +40,7 @@ if not _G._VERSION:match("Lua 5%.2") then
 		if val == 0 then
 			-- Value is 0,
 			exp, mant = 0, 0;
+			str = "0"
 			if 1/val == pinf then
 				-- Positive 0
 				sign = flags:match("[ +]") or "";
@@ -47,6 +48,11 @@ if not _G._VERSION:match("Lua 5%.2") then
 				assert(1/val == ninf);
 				-- Negative 0
 				sign = '-';
+			end
+			if prec then
+				if prec > 1 then
+					str = str .. "." .. ("0"):rep(prec)
+				end
 			end
 		else
 			if val < 0 then
@@ -69,6 +75,9 @@ if not _G._VERSION:match("Lua 5%.2") then
 			until (mant >= 8 and mant < 16)
 			while mant ~= 0 do
 				local ip, fp = math.modf(mant);
+				if prec and prec < 1 and fp >= 0.5 then
+					ip = ip + 1
+				end
 				if str then
 					str = str .. _fmt(upper and "%1.1X" or "%1.1x", ip);
 				else
@@ -76,25 +85,31 @@ if not _G._VERSION:match("Lua 5%.2") then
 				end
 				if prec then
 					prec = prec - 1
-					if prec < 1 then
+					if prec < 0 then
 						break
 					end
 				end
 				mant = fp*16;
 			end
+			str = str:gsub("%.$", ""); -- Remove a leading dot if we left one, they look ugly.
 		end
-		str = str .. (upper and "P" or "p") .. _fmt("%d", exp);
-		if width and (#str + 2) < width then
-			local fill = width - (#str + 2);
+		str = str .. (upper and "P" or "p") .. _fmt("%+d", exp);
+		if width and (#str + 2 + #sign) < width then
+			local fill = width - (#str + 2 + #sign);
 			if flags:match("-") then
-				str = "0x" .. str .. (" "):rep(fill);
+				str = sign .. (upper and "0X" or "0x") .. str .. (" "):rep(fill);
 			elseif flags:match("0") then
-				str = "0x" .. ("0"):rep(fill) .. str;
+				-- If no ., put zeroes leading, otherwise put them trailing.
+				if str:match("%.") then
+					str = sign .. (upper and "0X" or "0x") .. str:gsub("([pP])", ("0"):rep(fill) .. "%1")
+				else
+					str = sign .. (upper and "0X" or "0x") .. ("0"):rep(fill) .. str;
+				end
 			else
-				str = (" "):rep(fill) .. "0x" .. str;
+				str = (" "):rep(fill) .. sign .. (upper and "0X" or "0x") .. str;
 			end
 		else
-			str = "0x" .. str;
+			str = sign .. (upper and "0X" or "0x") .. str;
 		end
 		return str;
 	end
@@ -127,13 +142,13 @@ function string.format(fmt, ...)
 				ix = ix + #argspec + 1;
 				argspec = tonumber(argspec);
 			else
-				assert(argi ~= nil, "Cannot mix explicit position specifiers with sequences specifiers");
+				assert(argi ~= nil, "Cannot mix explicit position specifiers with sequenced specifiers");
 				argspec = argi;
 				argi = argi + 1;
 			end
-			local flag = fmt:match("^([#0- +]?)", ix);
+			local flag = fmt:match("^([#0%- +]*)", ix);
 			ix = ix + #flag;
-			local width = fmt:match("^%d", ix) or fmt:match("^%*%d+%$", ix) or fmt:match("^%*", ix);
+			local width = fmt:match("^%d+", ix) or fmt:match("^%*%d+%$", ix) or fmt:match("^%*", ix);
 			if width ~= nil then
 				ix = ix + #width;
 				if width:match("^%*%d+%$") then
