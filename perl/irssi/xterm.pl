@@ -32,7 +32,7 @@ sub init_termcap() {
 	my $termios = new POSIX::Termios;
 	$termios->getattr;
 	my $terminal = Tgetent Term::Cap { TERM => undef, OSPEED => $termios->getospeed };
-	$terminal->Trequire qw(hs ts fs); # hs = has status, ts = to status, fs = from status
+	$terminal->Trequire(qw(hs ts fs)); # hs = has status, ts = to status, fs = from status
 	$starttitle = $terminal->Tputs("ts", 1, undef);
 	$endtitle = $terminal->Tputs("fs", 1, undef);
 }
