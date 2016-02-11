@@ -115,7 +115,7 @@ sub eval_perl {
 		@result = eval $data;
 	}
 	if ($@) {
-		doprint($server, $witem, "Script Error; $@", MSGLEVEL_CLIENTNOTICE);
+		$window->print("Script error; $@", MSGLEVEL_CLIENTNOTICE);
 		return;
 	}
 	return if $switches{noprint};
@@ -130,27 +130,27 @@ sub eval_perl {
 
 	if (scalar(@result) < 1)
 	{
-		doprint($server, $witem, "Expression returned no value.", MSGLEVEL_CLIENTNOTICE);
+		$window->print("Expression returned no value.", MSGLEVEL_CLIENTNOTICE);
 	}
 	elsif (scalar(@result) == 1)
 	{
-		doprint($server, $witem, "Expression returned single value:", MSGLEVEL_CLIENTNOTICE);
+		$window->print("Expression returned single value:", MSGLEVEL_CLIENTNOTICE);
 		eval {
-			doprint($server, $witem, Data::Dumper->Dump([$result[0]], ["result"]), MSGLEVEL_CLIENTNOTICE);
+			$window->print(Data::Dumper->Dump([$result[0]], ["result"]), MSGLEVEL_CLIENTNOTICE);
 		};
 		if ($@) {
 			my $x = $result[0];
 			if (ref($x)) {
-				doprint($server, $witem, sprintf("Dump failed of value [%s]: %s", "$x", $@), MSGLEVEL_CLIENTNOTICE);
+				$window->print(sprintf("Dump failed of value [%s]: %s", "$x", $@), MSGLEVEL_CLIENTNOTICE);
 			} else {
-				doprint($server, $witem, sprintf("Dump failed of value: %s", $@), MSGLEVEL_CLIENTNOTICE);
+				$window->print(sprintf("Dump failed of value: %s", $@), MSGLEVEL_CLIENTNOTICE);
 			}
 		}
-		doprint($server, $witem, "---", MSGLEVEL_CLIENTNOTICE);
+		$window->print("---", MSGLEVEL_CLIENTNOTICE);
 	}
 	else
 	{
-		doprint($server, $witem, sprintf("Expression returned %d values:", scalar(@result)), MSGLEVEL_CLIENTNOTICE);
+		$window->print(sprintf("Expression returned %d values:", scalar(@result)), MSGLEVEL_CLIENTNOTICE);
 		my $str = "";
 		for my $idx (0..$#result) {
 			eval {
@@ -165,8 +165,8 @@ sub eval_perl {
 				}
 			}
 		}
-		doprint($server, $witem, $str, MSGLEVEL_CLIENTNOTICE);
-		doprint($server, $witem, "---", MSGLEVEL_CLIENTNOTICE);
+		$window->print($str, MSGLEVEL_CLIENTNOTICE);
+		$window->print("---", MSGLEVEL_CLIENTNOTICE);
 	}
 }
 
