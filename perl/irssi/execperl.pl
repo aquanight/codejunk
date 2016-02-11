@@ -4,8 +4,6 @@ use Irssi;
 use Irssi::Irc;
 use vars qw($VERSION %IRSSI);
 
-use CommonStuff;
-
 #use Cwd;
 use POSIX qw(strftime);
 
@@ -36,6 +34,7 @@ sub eval_perl {
 		$switches{$1} = 1;
 	}
 	my @result;
+	my $window = Irssi::active_win();
 	{
 		# Load in autovars:
 		# <punctuation autovars not supported, blame Perl>
@@ -65,7 +64,6 @@ sub eval_perl {
 		# $X : userhost $N
 		# $Y : REALNAME
 		# $Z : time of day in timestamp_format
-		my $window = Irssi::active_win();
 		my $A = ($server && $server->{usermode_away} ? $server->{away_reason} : "");
 		my $B = Irssi::parse_special('$B');
 		my $C = ($witem && $witem->{type} eq "CHANNEL" ? $witem->{name} : "");
