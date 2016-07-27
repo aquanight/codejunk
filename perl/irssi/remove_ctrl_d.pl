@@ -15,6 +15,25 @@ our %IRSSI = (
 sub make_color($$)
 {
 	my ($fg, $bg) = @_;
+	if ($fg eq '.') {
+		return sprintf("\3%d", ord($bg) - 31);
+	}
+	elsif ($fg eq '-') {
+		return sprintf("\3%d", ord($bg) + 49);
+	}
+	elsif ($fg eq ',') {
+		return sprintf("\3%d", ord($bg) + 129);
+	}
+	elsif ($fg eq '+') {
+		return sprintf("\3,%d", ord($bg) - 31);
+	}
+	elsif ($fg eq "'") {
+		return sprintf("\3,%d", ord($bg) + 49);
+	}
+	elsif ($fg eq '&') {
+		return sprintf("\3,%d", ord($bg) + 129);
+	}
+
 	$fg = ord($fg) - ord('0');
 	$bg = ord($bg) - ord('0');
 	if ($fg >= 0 && $fg <= 15)
@@ -57,6 +76,7 @@ sub sig_remove_ctrl_d($$)
 		$data =~ s/\x04g/\cO/g; # Replace FORMAT_STYLE_DEFAULTS with CTRL+O
 		$data =~ s/\x04h//g; # Remove FORMAT_STYLE_CLRTOEOL
 		$data =~ s/\x04i//g; # Remove FORMAT_STYLE_MONOSPACE
+		$data =~ s/\x04#....//g; # Remove 24-bit colors
 		$data =~ s/\x04(.)(.)/make_color($1, $2)/ge; # Convert color coding.
 		$data =~ s/\x04//g; # Remove any remaining CTRL+D markers (malformed code, etc).
 		$rewrite = 1;
