@@ -68,7 +68,11 @@ sub longest_common_stem(@)
 	# We capture the leading portion of the first word, then require that every word thereafter starts with the same leading portion.
 	# The use of greedy captures ensures we get the longest possible result.
 	my ($stem) = $content =~ /^([^\n]*)[^\n]*(\n\1[^\n]*)+$/i;
-	$stem//die "Failed to find a stem";
+	# An undef meant the regex did not match, but it should never fail to match because the capture group can match a zero-length string.
+	# So if it fails then something else went horribly wrong.
+	$stem//die "Failed to find a common stem";
+	# In the case of completion_strict = OFF we may get a case where f<tab> produces a list such as [foo] _foo_ ]foo[ and foo
+	# In that situation, longest_common_stem will return an empty string. It is for now left up to complete_word to deal with this situation.
 	return $stem;
 }
 
@@ -169,6 +173,7 @@ sub complete_word ($$\$$$)
 				bell();
 				$previous = $complist;
 				my $result = longest_common_stem(@$complist);
+				if (length $result < length $word) { $result = $word; } # Don't accept a stem shorter than the original input.
 				# IGNORE want_space as this is not a full completion.
 				$prevline = $before . $result . $after;
 				$prevpos = $$pos = length($before) + length($result);
